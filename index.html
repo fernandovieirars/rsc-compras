@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Contratações &amp; Compras — Rio Sul Construções</title>
+<meta name="description" content="Acompanhamento compartilhado dos prazos-limite de contratação de terceirizadas e de compra de materiais.">
+<meta name="theme-color" content="#1c1c1e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%231c1c1e'/%3E%3Cpath d='M22 70V42h34V26h16L38 78z' fill='%23ffd900'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topo">
+  <div class="marca">
+    <img src="RioSul_logo.svg" alt="Rio Sul Construções">
+    <div>
+      <h1 id="tituloObra">Contratações &amp; Compras</h1>
+      <div class="sub" id="subObra">carregando…</div>
+    </div>
+  </div>
+  <div class="dir">
+    <span class="chip-prazo" id="chipPrazo"></span>
+    <button class="eu" id="btnEu" onclick="perguntarQuemSou()">…</button>
+  </div>
+</header>
+
+<nav class="abas">
+  <button class="aba on" data-aba="contratacoes" onclick="trocarAba('contratacoes')">
+    Terceirizadas <span class="n" id="nCtr">—</span></button>
+  <button class="aba" data-aba="materiais" onclick="trocarAba('materiais')">
+    Materiais <span class="n" id="nMat">—</span></button>
+  <button class="aba" data-aba="historico" onclick="trocarAba('historico')">
+    Histórico</button>
+</nav>
+
+<main class="area">
+  <div id="conteudo"><div class="carregando">Carregando o acompanhamento…</div></div>
+  <div class="rodape">
+    Rio Sul Construções · os prazos-limite e os valores de referência vêm da PC e do cronograma.
+    O farol é recalculado a cada abertura, a partir da data de hoje.
+  </div>
+</main>
+
+<div class="aviso" id="aviso"></div>
+
+<script src="app.js"></script>
+<script src="importar.js"></script>
+</body>
+</html>

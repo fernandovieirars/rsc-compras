@@ -1,0 +1,434 @@
+{
+ "origem": "Valores calculados pelas proprias planilhas de origem (colunas de formula).",
+ "contratacoes": {
+  "data_base": "2026-08-03",
+  "alerta_atencao_dias": 5,
+  "casos": [
+   {
+    "item": 1,
+    "prazo": "2026-08-07",
+    "situacao": "ATENÇÃO"
+   },
+   {
+    "item": 2,
+    "prazo": "2026-08-07",
+    "situacao": "ATENÇÃO"
+   },
+   {
+    "item": 3,
+    "prazo": "2026-08-07",
+    "situacao": "ATENÇÃO"
+   },
+   {
+    "item": 4,
+    "prazo": "2026-08-07",
+    "situacao": "ATENÇÃO"
+   },
+   {
+    "item": 5,
+    "prazo": "2026-08-07",
+    "situacao": "ATENÇÃO"
+   },
+   {
+    "item": 6,
+    "prazo": "2026-08-07",
+    "situacao": "ATENÇÃO"
+   },
+   {
+    "item": 7,
+    "prazo": "2026-08-10",
+    "situacao": "OK"
+   },
+   {
+    "item": 8,
+    "prazo": "2026-08-10",
+    "situacao": "OK"
+   },
+   {
+    "item": 9,
+    "prazo": "2026-08-14",
+    "situacao": "OK"
+   },
+   {
+    "item": 10,
+    "prazo": "2026-08-15",
+    "situacao": "OK"
+   },
+   {
+    "item": 11,
+    "prazo": "2026-08-17",
+    "situacao": "OK"
+   },
+   {
+    "item": 12,
+    "prazo": "2026-08-21",
+    "situacao": "OK"
+   },
+   {
+    "item": 13,
+    "prazo": "2026-09-13",
+    "situacao": "OK"
+   },
+   {
+    "item": 14,
+    "prazo": "2026-09-13",
+    "situacao": "OK"
+   }
+  ]
+ },
+ "materiais": {
+  "data_base": "2026-08-04",
+  "urgente_dias": 3,
+  "proximo_dias": 10,
+  "casos": [
+   {
+    "item": 1,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 2,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 3,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 4,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 5,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 6,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 7,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 8,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 9,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 10,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 11,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 12,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 13,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 14,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 15,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 16,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 17,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 18,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 19,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 20,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 21,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 22,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 23,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 24,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 25,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 26,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 27,
+    "limite": "2026-08-07",
+    "prioridade": "URGENTE",
+    "acao": "COMPRAR ATÉ 07/08/2026"
+   },
+   {
+    "item": 28,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 29,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 30,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 31,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 32,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 33,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 34,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 35,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 36,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 37,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 38,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 39,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 40,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 41,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 42,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 43,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 44,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 45,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 46,
+    "limite": "2026-08-10",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 10/08/2026"
+   },
+   {
+    "item": 47,
+    "limite": "2026-08-14",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 14/08/2026"
+   },
+   {
+    "item": 48,
+    "limite": "2026-08-14",
+    "prioridade": "PRÓXIMO",
+    "acao": "COMPRAR ATÉ 14/08/2026"
+   },
+   {
+    "item": 49,
+    "limite": "2026-08-15",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 50,
+    "limite": "2026-08-15",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 51,
+    "limite": "2026-08-17",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 52,
+    "limite": "2026-08-17",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 53,
+    "limite": "2026-08-21",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 54,
+    "limite": "2026-08-21",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 55,
+    "limite": "2026-09-13",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 56,
+    "limite": "2026-09-13",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 57,
+    "limite": "2026-09-13",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   },
+   {
+    "item": 58,
+    "limite": "2026-09-13",
+    "prioridade": "PROGRAMADO",
+    "acao": "OK"
+   }
+  ]
+ }
+}

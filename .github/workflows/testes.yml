@@ -1,0 +1,23 @@
+name: Testes
+
+# O cálculo de prazos é o coração do app: se ele errar, compras perde data-limite
+# sem ninguém notar na tela. Este teste compara a tradução em JavaScript com o
+# que o próprio Excel calculou nas planilhas de origem.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  calculo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Regressão do cálculo de prazos
+        run: node testes/calculo.test.js
+      - name: Sintaxe dos scripts
+        run: node --check app.js && node --check importar.js
