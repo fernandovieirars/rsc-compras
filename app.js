@@ -143,6 +143,15 @@ function esc(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+// O valor calculado continua sendo 'OK' — é o que a planilha produz, e é contra
+// ele que testes/calculo.test.js prova a fidelidade. Só o RÓTULO muda: na tela,
+// "OK" lia como "resolvido", quando significa apenas que o prazo ainda não
+// apertou. Nenhum item ali está resolvido — nenhum foi contratado ainda.
+// Misturar valor e rótulo quebrou 12 testes antes de eu separar os dois.
+function rotuloSituacao(t) {
+  return { 'OK': 'NO PRAZO', 'PROGRAMADO': 'NO PRAZO' }[t] || t;
+}
+
 function classeSelo(t) {
   return { 'ATRASADO': 'atrasado', 'URGENTE': 'urgente', 'ATENÇÃO': 'atencao',
            'PRÓXIMO': 'proximo', 'OK': 'ok', 'PROGRAMADO': 'programado' }[t] || 'neutro';
@@ -452,12 +461,12 @@ function linhaContratacao(c) {
 
   const principal = `<tr class="${aberta ? 'aberta' : ''}">
     <td data-r="Item" class="mini">${c.item ?? ''}</td>
-    <td data-r="Serviço" class="atividade forte"><span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
+    <td data-r="Serviço" class="atividade forte">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
     <td data-r="Início" class="mini">${fmtData(c.data_inicio) || '—'}</td>
     <td data-r="Término" class="mini">${fmtData(c.data_termino) || '—'}</td>
     <td data-r="Contratar até" class="forte">${fmtData(c.prazo_contratacao) || '—'}</td>
-    <td data-r="Ação"><span class="acao ${acao === 'OK' ? 'ok' : 'pede'}">${na ? '—' : esc(acao)}</span></td>
-    <td data-r="Situação">${(f && !na) ? `<span class="selo ${classeSelo(f)}">${f}</span>` : '<span class="selo neutro">—</span>'}</td>
+    <td data-r="Ação"><span class="acao ${acao === 'OK' ? 'ok' : 'pede'}">${na ? '—' : esc(rotuloSituacao(acao))}</span></td>
+    <td data-r="Situação">${(f && !na) ? `<span class="selo ${classeSelo(f)}">${rotuloSituacao(f)}</span>` : '<span class="selo neutro">—</span>'}</td>
     <td data-r="Status"><select class="ed ${classeStatus(c.status_processo)}"
         onchange="editar('contratacao','${c.id}','status_processo',this.value)">
       ${STATUS_CTR.map(s => `<option ${c.status_processo === s ? 'selected' : ''}>${s}</option>`).join('')}
@@ -497,6 +506,9 @@ function linhaContratacao(c) {
       <div class="linha"><span>Material</span><span>${fmtMoeda(c.valor_pc_material)}</span></div>
       <div class="linha"><span><b>Total</b></span><span><b>${fmtMoeda(c.valor_pc_total)}</b></span></div>
       <div class="linha"><span>Linhas PC</span><span class="mini">${esc(c.linhas_pc_mo || '—')}</span></div>
+      ${c.escopo_negociacao ? `<div class="nota" style="margin-top:9px;background:var(--azul-bg);border-color:#b2ddff;color:var(--azul)">
+        <b>Orientação de compra${c.prioridade_fechamento ? ` — prioridade ${c.prioridade_fechamento}` : ''}:</b>
+        ${esc(c.escopo_negociacao)}</div>` : ''}
       ${c.obs_composicao ? `<div class="nota" style="margin-top:9px">${esc(c.obs_composicao)}</div>` : ''}
       ${materiaisDaContratacao(c)}
     </div>
@@ -522,6 +534,15 @@ function linhaContratacao(c) {
   </div></td></tr>`;
 
   return principal + detalhe;
+}
+
+// A fila de negociação que o planejamento passou aos compradores. Não é o
+// prazo: é a ordem de atacar. Um item pode ser prioridade 1 e ainda ter folga,
+// e outro vencer antes sem estar na fila — por isso os dois convivem na tela.
+function seloPrioridade(c) {
+  return c.prioridade_fechamento
+    ? `<span class="prio" title="Prioridade ${c.prioridade_fechamento} de fechamento">${c.prioridade_fechamento}</span>`
+    : `<span class="prio vazio" title="Sem prioridade de fechamento definida">–</span>`;
 }
 
 function menorCotacao(c) {
@@ -611,14 +632,14 @@ function linhaMaterial(m) {
 
   const principal = `<tr class="${aberta ? 'aberta' : ''}">
     <td data-r="Linha PC" class="mini forte">${esc(m.linha_pc)}</td>
-    <td data-r="Material" class="material"><span class="corta" title="${esc(m.material)}">${esc(m.material)}</span>
-      <span class="mini corta">${esc(m.atividade || '')}</span></td>
+    <td data-r="Material" class="material"><span class="nome">${esc(m.material)}</span>
+      <span class="mini">${esc(m.atividade || '')}</span></td>
     <td data-r="Un" class="mini">${esc(m.unidade || '')}</td>
     <td data-r="Qtd" class="num">${fmtNum(m.quantidade)}</td>
     <td data-r="Custo PC" class="num">${fmtMoeda(m.custo_total_pc)}</td>
     <td data-r="Comprar até" class="forte empilha">${fmtData(m.data_limite_compra) || '—'}
-      <span class="acao ${acao === 'OK' ? 'ok' : 'pede'}">${na ? '' : esc(acao)}</span></td>
-    <td data-r="Prioridade">${(p && !na) ? `<span class="selo ${classeSelo(p)}">${p}</span>` : '<span class="selo neutro">—</span>'}</td>
+      <span class="acao ${acao === 'OK' ? 'ok' : 'pede'}">${na ? '' : esc(rotuloSituacao(acao))}</span></td>
+    <td data-r="Prioridade">${(p && !na) ? `<span class="selo ${classeSelo(p)}">${rotuloSituacao(p)}</span>` : '<span class="selo neutro">—</span>'}</td>
     <td data-r="Status"><select class="ed ${classeStatus(m.status_compra)}"
         onchange="editar('material','${m.id}','status_compra',this.value)">
       ${STATUS_MAT.map(s => `<option ${m.status_compra === s ? 'selected' : ''}>${s}</option>`).join('')}
@@ -636,7 +657,9 @@ function linhaMaterial(m) {
 
   const detalhe = `<tr class="detalhe"><td colspan="11" class="semrot"><div class="det">
     <div class="bloco">
-      <h4>Referência da PC</h4>
+      <h4>Especificação completa</h4>
+      <div class="espec">${esc(m.material)}</div>
+      <div class="linha"><span>Linha da PC</span><span>${esc(m.linha_pc)}</span></div>
       <div class="linha"><span>Quantidade</span><span>${fmtNum(m.quantidade)} ${esc(m.unidade || '')}</span></div>
       <div class="linha"><span>Custo unitário</span><span>${fmtMoeda(m.custo_unit_pc)}</span></div>
       <div class="linha"><span><b>Custo total</b></span><span><b>${fmtMoeda(m.custo_total_pc)}</b></span></div>
@@ -792,7 +815,7 @@ function telaRelatorio() {
         <td data-r="Tipo" class="mini">${a.tipo}</td>
         <td data-r="Item" class="material forte"><span class="corta" title="${esc(a.nome)}">${esc(a.nome)}</span></td>
         <td data-r="Prazo" class="forte">${fmtData(a.prazo)}</td>
-        <td data-r="Situação"><span class="selo ${classeSelo(a.selo)}">${a.selo}</span></td>
+        <td data-r="Situação"><span class="selo ${classeSelo(a.selo)}">${rotuloSituacao(a.selo)}</span></td>
         <td data-r="Atraso" class="mini">${a.dias < 0 ? `<b style="color:var(--vermelho)">${-a.dias} dias atrás</b>`
             : `em ${a.dias} dia${a.dias === 1 ? '' : 's'}`}</td>
         <td data-r="Status" class="mini">${esc(a.status)}</td>
@@ -806,9 +829,9 @@ function telaRelatorio() {
     const pend = ms.filter(m => !m.comprado).length;
     const f = farolDe(c);
     return `<tr>
-      <td data-r="Serviço" class="atividade forte"><span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
+      <td data-r="Serviço" class="atividade forte">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
       <td data-r="Contratar até">${fmtData(c.prazo_contratacao) || '—'}</td>
-      <td data-r="Situação">${f ? `<span class="selo ${classeSelo(f)}">${f}</span>` : '—'}</td>
+      <td data-r="Situação">${f ? `<span class="selo ${classeSelo(f)}">${rotuloSituacao(f)}</span>` : '—'}</td>
       <td data-r="Contratação" class="mini">${c.contratado
           ? `<b style="color:var(--verde)">✓ contratado</b>` : esc(c.status_processo)}</td>
       <td data-r="Materiais" class="mini">${ms.length

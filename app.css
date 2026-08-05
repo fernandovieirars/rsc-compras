@@ -84,8 +84,22 @@ tr.detalhe>td{background:#fbfaf4;padding:0;border-bottom:2px solid var(--borda)}
 .forte{font-weight:600}
 .mini{font-size:11.5px;color:var(--fraco)}
 td.atividade{max-width:250px;min-width:170px}
-td.material{max-width:330px;min-width:210px}
 .corta{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* O nome do material É a especificação: "PORTA DE GIRO, MDF SEMI-OCA - PINTURA
+   ESMALTE BASE D'ÁGUA - DIMENSOES: 0,7X2,10M". Cortar com reticências apagava
+   justamente medida, acabamento e referência — o que o fornecedor precisa para
+   cotar certo. Quebra em até 4 linhas; o detalhe mostra por inteiro. */
+td.material{max-width:420px;min-width:230px}
+td.material .nome{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;
+  overflow:hidden;line-height:1.35;font-weight:600}
+td.material .mini{display:block;margin-top:2px}
+.espec{background:#fff;border:1px solid var(--borda);border-radius:7px;padding:9px 11px;
+  font-size:12.5px;line-height:1.5;color:var(--tinta);margin-bottom:10px;word-break:break-word}
+.prio{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;
+  border-radius:5px;background:var(--tinta);color:var(--amarelo);font:800 11px var(--fonte);
+  padding:0 5px;margin-right:6px;vertical-align:middle}
+.prio.vazio{background:var(--borda-2);color:var(--fraco)}
 
 /* ── Selos ─────────────────────────────────────────────── */
 .selo{display:inline-block;padding:2.5px 9px;border-radius:999px;font:700 10.5px var(--fonte);
