@@ -90,6 +90,45 @@ somá-la nas duas contaria o custo em dobro.
 
 ---
 
+## Relatório e alerta diário
+
+A aba **Relatório** responde três perguntas, nessa ordem: o que trava a obra
+hoje, quanto do plano já foi fechado, quanto custa. Sai formatada para impressão
+(a folha de estilo esconde filtros, botões e campos de edição).
+
+O mesmo panorama sai por e-mail **todo dia útil às 08:00**, pela Edge Function
+`alerta-compras-diario`, agendada no `pg_cron`. Quem recebe é gerenciado na
+própria tela — não é lista fixa em código.
+
+**A função não calcula nada.** Farol, prioridade e ação vêm prontos das views
+`compras_painel_*`. A regra de prazo já existia em dois lugares (a planilha
+original e o JavaScript do app); uma terceira cópia em TypeScript acabaria
+divergindo, e a divergência apareceria como um e-mail dizendo "OK" para um item
+que a tela mostra vermelho.
+
+Disparo manual, útil para testar:
+
+```
+POST /functions/v1/alerta-compras-diario?dry=1   # monta e devolve o HTML, sem enviar
+POST /functions/v1/alerta-compras-diario         # envia de verdade
+```
+
+### Pré-requisito: domínio verificado no Resend
+
+O envio usa o `RESEND_API_KEY` do projeto. Enquanto o domínio
+`riosulconstrucoes.com.br` não estiver verificado no Resend, a conta fica em
+**modo de teste** e só entrega para o endereço dono da conta — todo o resto
+falha com `403 validation_error`.
+
+Isso não é hipótese: o app de planos de ação acumulou **181 falhas silenciosas**
+por esse motivo, contra 86 entregas, todas para uma única pessoa. Ninguém
+percebeu porque o erro só existia no log.
+
+Por isso a tela de Relatório mostra o **status do último envio**: a falha
+aparece para quem usa, não só para quem consulta o banco.
+
+---
+
 ## Arquitetura
 
 Estático puro. Sem build, sem framework, sem dependência no caminho crítico.

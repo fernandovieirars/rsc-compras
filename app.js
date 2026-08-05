@@ -25,6 +25,8 @@ const S = {
   contratacoes: [],
   materiais: [],
   eventos: [],
+  destinatarios: [],
+  envios: [],
   aba: 'contratacoes',
   filtro: 'todos',
   busca: '',
@@ -188,6 +190,15 @@ async function carregarEventos() {
   S.eventos = await api(`compras_evento?obra_id=eq.${S.obra.id}&select=*&order=em.desc&limit=300`);
 }
 
+async function carregarRelatorio() {
+  const [dest, envios] = await Promise.all([
+    api(`compras_destinatario?obra_id=eq.${S.obra.id}&select=*&order=papel.asc,nome.asc`),
+    api(`compras_envio_log?obra_id=eq.${S.obra.id}&select=*&order=em.desc&limit=12`),
+  ]);
+  S.destinatarios = dest;
+  S.envios = envios;
+}
+
 // Grava um campo e registra o que mudou. O registro é o que transforma isto
 // num acompanhamento: sem ele, editar é sobrescrever e a pergunta "por que
 // este item está parado há três semanas?" fica sem resposta.
@@ -290,6 +301,9 @@ function trocarAba(aba) {
   if (aba === 'historico' && !S.eventos.length) {
     carregarEventos().then(render).catch(e => avisar(e.message, true));
   }
+  if (aba === 'relatorio') {
+    carregarRelatorio().then(render).catch(e => avisar(e.message, true));
+  }
   render();
   window.scrollTo(0, 0);
 }
@@ -313,6 +327,7 @@ function render() {
   const el = document.getElementById('conteudo');
   if (S.aba === 'contratacoes') el.innerHTML = telaContratacoes();
   else if (S.aba === 'materiais') el.innerHTML = telaMateriais();
+  else if (S.aba === 'relatorio') el.innerHTML = telaRelatorio();
   else el.innerHTML = telaHistorico();
 }
 
@@ -650,7 +665,228 @@ function alertaEntrega(m) {
     é necessário na obra (${fmtData(m.data_necessaria)}).</div>`;
 }
 
-/* ---- Tela 3: histórico ---- */
+/* ============================================================
+   Tela 3: RELATÓRIO
+   É a tela que vai impressa para a reunião de obra e o mesmo panorama que sai
+   por e-mail todo dia útil às 08:00. Responde três perguntas, nessa ordem:
+   o que trava a obra hoje · quanto do plano já foi fechado · quanto custa.
+   ============================================================ */
+function telaRelatorio() {
+  const base = dataBase();
+  const ctr = S.contratacoes, mat = S.materiais;
+
+  // "Exige ação" = prazo estourado ou na iminência, e ainda não resolvido.
+  const ctrAcao = ctr.filter(c => !c.contratado && c.status_processo !== 'NÃO SE APLICA'
+      && ['ATRASADO', 'ATENÇÃO'].includes(farolDe(c)))
+    .map(c => ({ tipo: 'Terceirizada', nome: c.atividade, prazo: c.prazo_contratacao,
+                 selo: farolDe(c), status: c.status_processo, valor: c.valor_pc_total,
+                 dias: diasEntre(base, c.prazo_contratacao) }));
+  const matAcao = mat.filter(m => !m.comprado && m.status_compra !== 'NÃO SE APLICA'
+      && ['ATRASADO', 'URGENTE'].includes(prioridadeDe(m)))
+    .map(m => ({ tipo: 'Material', nome: `${m.linha_pc} — ${m.material}`, prazo: m.data_limite_compra,
+                 selo: prioridadeDe(m), status: m.status_compra, valor: m.custo_total_pc,
+                 dias: diasEntre(base, m.data_limite_compra) }));
+  const acoes = [...ctrAcao, ...matAcao].sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
+
+  const contratados = ctr.filter(c => c.contratado).length;
+  const comprados = mat.filter(m => m.comprado).length;
+  const entregues = mat.filter(m => m.status_compra === 'ENTREGUE').length;
+  const pcCtr = ctr.reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+  const pcMat = mat.reduce((s, m) => s + Number(m.custo_total_pc || 0), 0);
+  const fechado = ctr.reduce((s, c) => s + Number(c.valor_contratado || 0), 0);
+  const cotados = mat.filter(m => m.valor_total_cotado != null);
+  const cotado = cotados.reduce((s, m) => s + Number(m.valor_total_cotado), 0);
+  const pcDosCotados = cotados.reduce((s, m) => s + Number(m.custo_total_pc || 0), 0);
+  const desvioMat = cotado - pcDosCotados;
+  const diasObra = S.obra.termino_obra ? diasEntre(base, S.obra.termino_obra) : null;
+
+  const kpis = `<div class="kpis">
+    ${kpi('Exigem ação hoje', acoes.length, 'prazo vencido ou na iminência', acoes.length ? 'r' : 'g',
+        acoes.length ? 'r' : 'g')}
+    ${kpi('Terceirizadas', `${contratados}/${ctr.length}`, 'contratadas', 'y')}
+    ${kpi('Materiais', `${comprados}/${mat.length}`, `${entregues} já entregues`, 'y')}
+    ${kpi('Prazo da obra', diasObra === null ? '—' : (diasObra >= 0 ? `${diasObra} d` : `${-diasObra} d`),
+        diasObra === null ? '' : (diasObra >= 0 ? `até ${fmtData(S.obra.termino_obra)}` : 'em atraso'),
+        'b', diasObra !== null && diasObra < 0 ? 'r' : '')}
+    ${kpi('Referência PC', fmtMoedaCurta(pcCtr), 'mão de obra + material', '')}
+    ${kpi('Já fechado', fmtMoedaCurta(fechado + cotado), 'contratado + cotado', 'g')}
+  </div>`;
+
+  const linhasAcao = acoes.length
+    ? acoes.map(a => `<tr>
+        <td data-r="Tipo" class="mini">${a.tipo}</td>
+        <td data-r="Item" class="material forte"><span class="corta" title="${esc(a.nome)}">${esc(a.nome)}</span></td>
+        <td data-r="Prazo" class="forte">${fmtData(a.prazo)}</td>
+        <td data-r="Situação"><span class="selo ${classeSelo(a.selo)}">${a.selo}</span></td>
+        <td data-r="Atraso" class="mini">${a.dias < 0 ? `<b style="color:var(--vermelho)">${-a.dias} dias atrás</b>`
+            : `em ${a.dias} dia${a.dias === 1 ? '' : 's'}`}</td>
+        <td data-r="Status" class="mini">${esc(a.status)}</td>
+        <td data-r="Valor PC" class="num">${fmtMoeda(a.valor)}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="7" class="semrot"><div class="vazio" style="color:var(--verde)">
+        ✓ Nada vencido nem na iminência. Contratações e compras estão dentro do prazo.</div></td></tr>`;
+
+  const porServico = ctr.map(c => {
+    const ms = S.materiais.filter(m => m.contratacao_id === c.id);
+    const pend = ms.filter(m => !m.comprado).length;
+    const f = farolDe(c);
+    return `<tr>
+      <td data-r="Serviço" class="atividade forte"><span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
+      <td data-r="Contratar até">${fmtData(c.prazo_contratacao) || '—'}</td>
+      <td data-r="Situação">${f ? `<span class="selo ${classeSelo(f)}">${f}</span>` : '—'}</td>
+      <td data-r="Contratação" class="mini">${c.contratado
+          ? `<b style="color:var(--verde)">✓ contratado</b>` : esc(c.status_processo)}</td>
+      <td data-r="Materiais" class="mini">${ms.length
+          ? (pend ? `<b style="color:var(--laranja)">${pend} de ${ms.length} a comprar</b>`
+                  : `<b style="color:var(--verde)">${ms.length} comprados</b>`)
+          : '<i>sem material vinculado</i>'}</td>
+      <td data-r="Referência PC" class="num">${fmtMoeda(c.valor_pc_total)}</td>
+      <td data-r="Contratado" class="num">${fmtMoeda(c.valor_contratado)}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="ferramentas">
+      <div style="flex:1;min-width:200px">
+        <div style="font:700 17px var(--fonte)">Relatório de contratações e compras</div>
+        <div class="mini">${esc(S.obra.nome)} · posição de ${fmtData(base)}</div>
+      </div>
+      <button class="btn" onclick="carregarRelatorio().then(render)">↻ Atualizar</button>
+      <button class="btn pri" onclick="window.print()">🖨 Imprimir</button>
+    </div>
+
+    ${kpis}
+
+    <div class="quadro" style="margin-bottom:16px">
+      <div style="padding:13px 16px 0"><h3 style="margin:0;font:700 14px var(--fonte)">
+        Exigem ação hoje</h3>
+        <div class="mini" style="margin-top:2px">Ordenado do mais atrasado para o mais próximo de vencer.</div></div>
+      <div class="rolagem"><table>
+        <thead><tr><th>Tipo</th><th>Item</th><th>Prazo</th><th>Situação</th><th>Atraso</th>
+          <th>Status</th><th class="num">Valor PC</th></tr></thead>
+        <tbody>${linhasAcao}</tbody></table></div>
+    </div>
+
+    <div class="quadro" style="margin-bottom:16px">
+      <div style="padding:13px 16px 0"><h3 style="margin:0;font:700 14px var(--fonte)">
+        Andamento por serviço</h3>
+        <div class="mini" style="margin-top:2px">Contratar o serviço sem comprar o material que ele aplica não destrava a obra — as duas colunas contam juntas.</div></div>
+      <div class="rolagem"><table>
+        <thead><tr><th>Serviço</th><th>Contratar até</th><th>Situação</th><th>Contratação</th>
+          <th>Materiais</th><th class="num">Referência PC</th><th class="num">Contratado</th></tr></thead>
+        <tbody>${porServico}</tbody></table></div>
+    </div>
+
+    <div class="quadro" style="margin-bottom:16px;padding:16px">
+      <h3 style="margin:0 0 11px;font:700 14px var(--fonte)">Valores</h3>
+      <div class="det" style="padding:0">
+        <div class="bloco">
+          <h4>Terceirizadas</h4>
+          <div class="linha"><span>Referência PC (${ctr.length} serviço${ctr.length === 1 ? '' : 's'})</span><span>${fmtMoeda(pcCtr)}</span></div>
+          <div class="linha"><span>Contratado até agora</span><span><b>${fmtMoeda(fechado)}</b></span></div>
+        </div>
+        <div class="bloco">
+          <h4>Materiais</h4>
+          <div class="linha"><span>Orçamento de material na PC</span><span>${fmtMoeda(pcMat)}</span></div>
+          <div class="linha"><span>Cotado (${cotados.length} de ${mat.length} itens)</span><span><b>${fmtMoeda(cotado)}</b></span></div>
+          ${cotados.length ? `<div class="linha"><span>Desvio nos itens já cotados</span>
+            <span style="color:${desvioMat <= 0 ? 'var(--verde)' : 'var(--vermelho)'};font-weight:700">
+            ${desvioMat <= 0 ? '−' : '+'}${fmtMoeda(Math.abs(desvioMat))}</span></div>` : ''}
+        </div>
+        <div class="bloco">
+          <h4>Como ler</h4>
+          <div class="nota">O desvio compara <b>só os itens já cotados</b> contra a PC deles.
+            Somar item sem preço como zero faria a obra parecer barata enquanto a maior parte
+            da compra ainda nem foi orçada.</div>
+        </div>
+      </div>
+    </div>
+
+    ${blocoDestinatarios()}`;
+}
+
+/* ---- Destinatários do alerta diário ---- */
+function blocoDestinatarios() {
+  const papeis = ['compras', 'gestor', 'planejamento', 'diretoria'];
+  const lista = S.destinatarios.length
+    ? S.destinatarios.map(d => `<tr>
+        <td data-r="Nome" class="forte">${esc(d.nome)}</td>
+        <td data-r="E-mail" class="mini">${esc(d.email)}</td>
+        <td data-r="Papel"><select class="ed" onchange="editarDestinatario('${d.id}','papel',this.value)">
+          ${papeis.map(p => `<option ${d.papel === p ? 'selected' : ''}>${p}</option>`).join('')}</select></td>
+        <td data-r="Recebe"><label style="display:flex;align-items:center;gap:7px;justify-content:flex-end">
+          <input type="checkbox" class="marca-sim" ${d.ativo ? 'checked' : ''}
+            onchange="editarDestinatario('${d.id}','ativo',this.checked)">
+          <span class="mini">${d.ativo ? 'recebe' : 'pausado'}</span></label></td>
+      </tr>`).join('')
+    : `<tr><td colspan="4" class="semrot"><div class="vazio">
+        Ninguém cadastrado — o alerta diário não vai sair para nenhum e-mail.</div></td></tr>`;
+
+  const ultimo = S.envios[0];
+  const statusEnvio = ultimo
+    ? `<div class="nota" style="margin-top:12px;${ultimo.status === 'erro'
+        ? 'background:var(--vermelho-bg);border-color:#fecdc9;color:var(--vermelho)' : ''}">
+        <b>Último envio:</b> ${fmtData(ultimo.em)} para ${esc(ultimo.destinatario)} —
+        ${ultimo.status === 'enviado' ? 'entregue ✓' : `falhou: ${esc(String(ultimo.erro || '').slice(0, 160))}`}
+       </div>`
+    : `<div class="nota" style="margin-top:12px">Nenhum envio registrado ainda.</div>`;
+
+  return `<div class="quadro" style="padding:16px">
+    <h3 style="margin:0 0 4px;font:700 14px var(--fonte)">Quem recebe o alerta diário</h3>
+    <div class="mini" style="margin-bottom:12px">
+      Todo dia útil às 08:00 sai este mesmo panorama por e-mail para a lista abaixo.</div>
+    <div class="rolagem"><table>
+      <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th style="text-align:right">Recebe</th></tr></thead>
+      <tbody>${lista}</tbody></table></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <input id="novoNome" class="ed" placeholder="Nome" style="border-color:var(--borda);background:#fff;max-width:180px">
+      <input id="novoEmail" class="ed" placeholder="email@riosulconstrucoes.com.br" type="email"
+        style="border-color:var(--borda);background:#fff;max-width:260px">
+      <select id="novoPapel" class="ed" style="border-color:var(--borda);background:#fff;max-width:150px">
+        ${papeis.map(p => `<option>${p}</option>`).join('')}</select>
+      <button class="btn pri" onclick="adicionarDestinatario()">+ Adicionar</button>
+    </div>
+    ${statusEnvio}
+  </div>`;
+}
+
+async function adicionarDestinatario() {
+  const nome = document.getElementById('novoNome').value.trim();
+  const email = document.getElementById('novoEmail').value.trim().toLowerCase();
+  const papel = document.getElementById('novoPapel').value;
+  if (!nome || !email) { avisar('Preencha nome e e-mail', true); return; }
+  if (!await exigirNome()) return;
+  try {
+    await api('compras_destinatario', {
+      method: 'POST',
+      body: JSON.stringify({ obra_id: S.obra.id, nome, email, papel }),
+    });
+    await carregarRelatorio();
+    render();
+    avisar('Destinatário incluído ✓');
+  } catch (e) {
+    // O banco valida o formato do endereço; a mensagem crua do Postgres não
+    // ajuda quem está na obra, então traduzimos o caso comum.
+    avisar(/check|violates/i.test(e.message)
+      ? 'E-mail inválido ou já cadastrado para esta obra.' : e.message, true);
+  }
+}
+
+async function editarDestinatario(id, campo, valor) {
+  if (!await exigirNome()) { render(); return; }
+  const d = S.destinatarios.find(x => x.id === id);
+  if (d) d[campo] = valor;
+  render();
+  try {
+    await api(`compras_destinatario?id=eq.${id}`, { method: 'PATCH', body: JSON.stringify({ [campo]: valor }) });
+    avisar('Salvo ✓');
+  } catch (e) {
+    avisar('Não salvou: ' + e.message, true);
+    await carregarRelatorio();
+    render();
+  }
+}
+
+/* ---- Tela 4: histórico ---- */
 const ROTULO_CAMPO = {
   status_processo: 'status', status_compra: 'status', contratado: 'contratado',
   comprado: 'comprado', fornecedor: 'fornecedor', fornecedor_escolhido: 'fornecedor contratado',
