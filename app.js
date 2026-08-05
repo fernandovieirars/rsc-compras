@@ -321,14 +321,39 @@ function aoFiltrar(f) {
   render();
 }
 
+// Trocar o innerHTML destrói o elemento em foco. Sem isto, digitar na busca era
+// inutilizável: cada tecla re-renderizava a tela, o campo era recriado e o
+// cursor caía fora — dava para digitar uma letra e só.
+//
+// A chave para reencontrar o campo é o próprio handler inline, que já é único
+// por campo (`editar('material','m12','fornecedor',…)`). Evita ter que espalhar
+// ids artificiais por dezenas de templates.
+function preservandoFoco(pintar) {
+  const ativo = document.activeElement;
+  const chave = ativo && (ativo.getAttribute('oninput') || ativo.getAttribute('onchange'));
+  let ini = null, fim = null;
+  try { ini = ativo.selectionStart; fim = ativo.selectionEnd; } catch (e) { /* date/number não expõem */ }
+
+  pintar();
+
+  if (!chave) return;
+  const alvo = [...document.querySelectorAll('input,select,textarea')]
+    .find(e => (e.getAttribute('oninput') || e.getAttribute('onchange')) === chave);
+  if (!alvo) return;
+  alvo.focus();
+  try { if (ini != null) alvo.setSelectionRange(ini, fim); } catch (e) { /* idem */ }
+}
+
 function render() {
   if (!S.obra) return;
   renderCabecalho();
   const el = document.getElementById('conteudo');
-  if (S.aba === 'contratacoes') el.innerHTML = telaContratacoes();
-  else if (S.aba === 'materiais') el.innerHTML = telaMateriais();
-  else if (S.aba === 'relatorio') el.innerHTML = telaRelatorio();
-  else el.innerHTML = telaHistorico();
+  preservandoFoco(() => {
+    if (S.aba === 'contratacoes') el.innerHTML = telaContratacoes();
+    else if (S.aba === 'materiais') el.innerHTML = telaMateriais();
+    else if (S.aba === 'relatorio') el.innerHTML = telaRelatorio();
+    else el.innerHTML = telaHistorico();
+  });
 }
 
 function renderCabecalho() {
@@ -532,7 +557,7 @@ function telaMateriais() {
     ${kpi('Itens', todos.length, 'na lista de compra', 'y')}
     ${kpi('Orçamento PC', fmtMoedaCurta(pcTotal), 'material, sem mão de obra', '')}
     ${kpi('Total cotado', fmtMoedaCurta(totalCotado), `${cotados.length} de ${todos.length} cotados`, 'b')}
-    ${kpi('Variação', cotados.length ? (desvio <= 0 ? '−' : '+') + fmtMoedaCurta(Math.abs(desvio)).replace('R$ ', 'R$ ') : '—',
+    ${kpi('Variação', cotados.length ? (desvio <= 0 ? '−' : '+') + fmtMoedaCurta(Math.abs(desvio)) : '—',
         cotados.length ? 'cotado vs PC (itens cotados)' : 'sem cotação ainda', '', desvio <= 0 ? 'g' : 'r')}
     ${kpi('Urgentes', urgentes, 'atrasados ou ≤3 dias', 'r', urgentes ? 'r' : '')}
     ${kpi('Comprados', comprados, `${todos.length - comprados} pendentes`, 'g', comprados ? 'g' : '')}
@@ -1066,7 +1091,20 @@ async function iniciar() {
 // Várias pessoas editam a mesma lista ao mesmo tempo. Recarregar ao voltar para
 // a aba evita o caso em que compras marca "COMPRADO" e o gestor, com a tela
 // velha aberta, grava por cima com o valor antigo.
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.obra) recarregar(); });
-setInterval(() => { if (!document.hidden && S.obra) recarregar(); }, 60000);
+//
+// Mas recarregar no meio de uma digitação APAGA o que a pessoa está escrevendo:
+// o texto ainda não foi salvo, então ele não existe no banco e a re-renderização
+// devolve o campo vazio. Digitar o nome de um fornecedor leva mais de um minuto
+// quando se está no canteiro, conferindo o orçamento — era perda garantida.
+// Enquanto houver um campo em foco, o refresh espera o próximo ciclo.
+function editandoAlgo() {
+  const el = document.activeElement;
+  return !!el && ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName);
+}
+function recarregarSeOcioso() {
+  if (!document.hidden && S.obra && !editandoAlgo()) recarregar();
+}
+document.addEventListener('visibilitychange', recarregarSeOcioso);
+setInterval(recarregarSeOcioso, 60000);
 
 iniciar();
