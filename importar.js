@@ -256,19 +256,28 @@ async function aplicarImportacao(tipo, plano, fundo) {
   btn.textContent = 'Aplicando…';
   try {
     for (const { atual, patch } of plano.mudadas) {
+      const origem = tipo === 'contratacoes' ? 'contratacao' : 'material';
+      const rotulo = tipo === 'contratacoes' ? atual.atividade : `${atual.linha_pc} — ${atual.material}`;
+
+      // Um evento POR CAMPO, com o valor velho e o novo. Antes registrávamos só
+      // a lista de nomes dos campos ("prazo_contratacao, valor_pc_material"),
+      // o que respondia "mudou" mas não "mudou de quanto para quanto".
+      // Quando a PC é revisada (REV05 → REV06) e um preço de referência sobe
+      // 30%, é essa diferença que precisa ficar registrada — senão o número
+      // novo vira verdade sem ninguém ter visto o antigo.
+      const eventos = Object.keys(patch).map(campo => ({
+        obra_id: S.obra.id, origem, ref_id: atual.id, referencia: rotulo,
+        campo: `PC: ${campo}`,
+        valor_antes: atual[campo] == null ? null : String(atual[campo]),
+        valor_depois: patch[campo] == null ? null : String(patch[campo]),
+        por_nome: S.eu || null,
+      }));
+
       await api(`${tabela}?id=eq.${atual.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ ...patch, atualizado_em: new Date().toISOString(), atualizado_por_nome: S.eu || null }),
       });
-      await api('compras_evento', {
-        method: 'POST',
-        body: JSON.stringify({
-          obra_id: S.obra.id, origem: tipo === 'contratacoes' ? 'contratacao' : 'material',
-          ref_id: atual.id, referencia: tipo === 'contratacoes' ? atual.atividade : `${atual.linha_pc} — ${atual.material}`,
-          campo: 'reimportação', valor_antes: null,
-          valor_depois: Object.keys(patch).join(', '), por_nome: S.eu || null,
-        }),
-      });
+      if (eventos.length) await api('compras_evento', { method: 'POST', body: JSON.stringify(eventos) });
     }
     if (plano.novas.length) {
       await api(tabela, { method: 'POST', body: JSON.stringify(plano.novas.map(r => ({ ...r, obra_id: S.obra.id }))) });

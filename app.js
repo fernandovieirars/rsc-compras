@@ -653,6 +653,8 @@ function linhaMaterial(m) {
         <input class="ed n" value="${m.valor_unit_cotado ?? ''}" placeholder="—"
           onchange="editar('material','${m.id}','valor_unit_cotado',this.value,true)"></div>
       <div class="linha"><span>Total cotado</span><span><b>${fmtMoeda(m.valor_total_cotado)}</b></span></div>
+      <button class="btn" style="margin-top:9px;width:100%" onclick="pedirCotacao('${m.id}')"
+        title="Abre seu e-mail com material, quantidade e prazo já preenchidos">✉ Pedir cotação</button>
       ${desvioUnit !== null ? `<div class="linha"><span>vs PC</span>
         <span style="color:${desvioUnit <= 0 ? 'var(--verde)' : 'var(--vermelho)'};font-weight:700">
         ${desvioUnit <= 0 ? '' : '+'}${desvioUnit.toFixed(1)}%</span></div>` : ''}
@@ -680,14 +682,62 @@ function linhaMaterial(m) {
 
 // Comprar não é receber. Uma entrega prevista depois da data em que o material
 // é necessário na obra atrasa o serviço mesmo com a compra "resolvida" — é o
-// furo que a planilha não mostrava.
-function alertaEntrega(m) {
-  if (!m.entrega_prevista || !m.data_necessaria || m.entrega_realizada) return '';
+// furo que a planilha não mostrava, porque ela não tinha coluna de entrega.
+// Entrega já realizada encerra o assunto, mesmo tendo chegado tarde.
+function atrasoEntrega(m) {
+  if (!m.entrega_prevista || !m.data_necessaria || m.entrega_realizada) return null;
   const atraso = diasEntre(m.data_necessaria, m.entrega_prevista);
-  if (atraso === null || atraso <= 0) return '';
+  return (atraso !== null && atraso > 0) ? atraso : null;
+}
+function alertaEntrega(m) {
+  const atraso = atrasoEntrega(m);
+  if (!atraso) return '';
   return `<div class="nota" style="background:var(--vermelho-bg);border-color:#fecdc9;color:var(--vermelho)">
     A entrega prevista chega <b>${atraso} dia${atraso > 1 ? 's' : ''}</b> depois da data em que o material
     é necessário na obra (${fmtData(m.data_necessaria)}).</div>`;
+}
+
+// Fecha o ciclo dentro do app: compras vê o que falta cotar e dispara o pedido
+// sem reescrever material, quantidade e prazo à mão num e-mail em branco —
+// que é onde o dado se perde e vira "o fornecedor entendeu outra coisa".
+function montarPedidoCotacao(m, obraNome, quem) {
+  const prazo = m.data_limite_compra ? fmtData(m.data_limite_compra) : 'a definir';
+  const assunto = `Solicitação de cotação — ${m.linha_pc} — ${obraNome}`;
+  const corpo = [
+    'Prezados,',
+    '',
+    `Solicitamos cotação para o item abaixo, referente à obra ${obraNome}.`,
+    '',
+    `Material: ${m.material}`,
+    `Quantidade: ${fmtNum(m.quantidade)} ${m.unidade || ''}`.trim(),
+    `Aplicação: ${m.atividade || '—'}`,
+    `Necessário na obra em: ${fmtData(m.data_necessaria) || 'a confirmar'}`,
+    '',
+    `Pedimos retorno até ${prazo}, data-limite para a compra não impactar o cronograma.`,
+    '',
+    ...(m.observacoes ? ['Observações técnicas a confirmar na proposta:', m.observacoes, ''] : []),
+    'Favor informar preço unitário, prazo de entrega e condições de pagamento.',
+    '',
+    'Atenciosamente,',
+    quem || '',
+    'Rio Sul Construções',
+  ].join('\n');
+
+  // O campo Fornecedor guarda o NOME, não o e-mail. Quando alguém já colou um
+  // endereço ali, aproveitamos; senão deixamos o destinatário em branco para a
+  // pessoa escolher — melhor vazio do que endereçado errado.
+  const destino = (m.fornecedor && m.fornecedor.includes('@')) ? m.fornecedor : '';
+  return `mailto:${encodeURIComponent(destino)}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+}
+
+// mailto abre o cliente de e-mail da própria pessoa: o pedido sai do endereço
+// dela, com a assinatura dela. Cotação é conversa comercial, não notificação
+// automática — tem que sair de um humano identificável, e a resposta do
+// fornecedor precisa cair numa caixa que alguém lê.
+function pedirCotacao(id) {
+  const m = acharLinha('material', id);
+  if (!m) return;
+  location.href = montarPedidoCotacao(m, S.obra.nome, S.eu);
 }
 
 /* ============================================================
@@ -791,6 +841,8 @@ function telaRelatorio() {
         <tbody>${linhasAcao}</tbody></table></div>
     </div>
 
+    ${blocoEntregasTarde()}
+
     <div class="quadro" style="margin-bottom:16px">
       <div style="padding:13px 16px 0"><h3 style="margin:0;font:700 14px var(--fonte)">
         Andamento por serviço</h3>
@@ -827,6 +879,38 @@ function telaRelatorio() {
     </div>
 
     ${blocoDestinatarios()}`;
+}
+
+// Item comprado com entrega marcada para depois da data em que ele é preciso na
+// obra. É o atraso mais perigoso do conjunto, porque na coluna Status ele
+// aparece como COMPRADO — resolvido. A planilha não tinha como mostrar isso.
+function blocoEntregasTarde() {
+  const tarde = S.materiais
+    .map(m => ({ m, atraso: atrasoEntrega(m) }))
+    .filter(x => x.atraso)
+    .sort((a, b) => b.atraso - a.atraso);
+
+  if (!tarde.length) return '';
+
+  return `<div class="quadro" style="margin-bottom:16px">
+    <div style="padding:13px 16px 0">
+      <h3 style="margin:0;font:700 14px var(--fonte);color:var(--vermelho)">
+        Compradas, mas chegam tarde</h3>
+      <div class="mini" style="margin-top:2px">
+        Entrega prevista depois da data em que o material é necessário na obra.
+        Aparecem como resolvidas no status — não estão.</div></div>
+    <div class="rolagem"><table>
+      <thead><tr><th>Linha PC</th><th>Material</th><th>Necessário</th>
+        <th>Entrega prevista</th><th>Atraso</th><th>Fornecedor</th></tr></thead>
+      <tbody>${tarde.map(({ m, atraso }) => `<tr>
+        <td data-r="Linha PC" class="mini forte">${esc(m.linha_pc)}</td>
+        <td data-r="Material" class="material"><span class="corta" title="${esc(m.material)}">${esc(m.material)}</span></td>
+        <td data-r="Necessário">${fmtData(m.data_necessaria)}</td>
+        <td data-r="Entrega prevista" class="forte">${fmtData(m.entrega_prevista)}</td>
+        <td data-r="Atraso"><span class="selo atrasado">${atraso} dia${atraso > 1 ? 's' : ''}</span></td>
+        <td data-r="Fornecedor" class="mini">${esc(m.fornecedor || '—')}</td>
+      </tr>`).join('')}</tbody></table></div>
+  </div>`;
 }
 
 /* ---- Destinatários do alerta diário ---- */

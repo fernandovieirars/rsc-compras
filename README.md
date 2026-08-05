@@ -127,6 +127,43 @@ percebeu porque o erro só existia no log.
 Por isso a tela de Relatório mostra o **status do último envio**: a falha
 aparece para quem usa, não só para quem consulta o banco.
 
+### DMARC — o registro que falta
+
+O domínio não tem DMARC (`_dmarc.riosulconstrucoes.com.br` está vazio). Sem ele,
+SPF e DKIM existem mas ninguém instrui o servidor de destino sobre o que fazer
+quando falham — e falsificar remetente em nome da Rio Sul fica mais fácil.
+
+Depois que o Resend estiver verificado, adicionar no mesmo painel do Microsoft:
+
+| | |
+|---|---|
+| Tipo | TXT |
+| Nome | `_dmarc` |
+| Valor | `v=DMARC1; p=none; rua=mailto:dmarc@riosulconstrucoes.com.br; fo=1` |
+
+Começar com `p=none` é deliberado: ele **apenas observa e reporta**, sem rejeitar
+nada. Depois de algumas semanas lendo os relatórios e confirmando que todo envio
+legítimo passa, sobe para `p=quarantine` e depois `p=reject`. Publicar `p=reject`
+de saída derruba e-mail legítimo que ninguém mapeou ainda.
+
+---
+
+## Guarda de permissões
+
+Roda de hora em hora (`reforcar_permissoes_compras`).
+
+Existe porque este projeto tem DEFAULT PRIVILEGES concedendo tudo ao `anon`
+(`pg_default_acl → anon=arwdDxtm`): **toda tabela nova nasce aberta**, e os
+`grant` das migrations somam em vez de substituir. Corrigir uma vez não resolve —
+a próxima tabela repete, e ninguém consulta privilégio no dia a dia.
+
+Então o mínimo de cada tabela é **declarado**, e a rotina devolve tudo ao lugar.
+Também religa RLS se alguém desligar. Na primeira execução encontrou **18
+desvios reais** no papel `authenticated` que as correções manuais tinham deixado
+passar.
+
+`compras_seguranca_log` vazia = nada saiu do lugar.
+
 ---
 
 ## Arquitetura
