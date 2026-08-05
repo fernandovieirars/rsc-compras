@@ -34,9 +34,12 @@ verde num item que venceu semana passada. Aqui a data-base é **hoje**, e o faro
 
 ## Como usar
 
-1. Abra o link. Não tem login.
-2. Na primeira vez, informe seu nome — ele aparece no **Histórico** ao lado do
-   que você alterar. Fica salvo no aparelho.
+1. Abra o link. Não tem login. Só consultar não pede nada.
+2. Na **primeira edição**, o app pede seu nome — ele aparece no **Histórico** ao
+   lado do que você alterar, e fica salvo no aparelho. A caixa não fecha vazia:
+   ou a pessoa se identifica, ou a mudança não é gravada. Um histórico que diz
+   "alguém mudou para EM COTAÇÃO" não responde a pergunta que se faz na reunião
+   de obra, que é quem destravou — ou quem parou — cada item.
 3. Edite direto na tabela: status, fornecedor, valores cotados, datas de compra
    e entrega. Salva sozinho.
 4. `▸` no fim da linha abre as cotações e os detalhes.

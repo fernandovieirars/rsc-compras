@@ -254,9 +254,13 @@ function acharLinha(tipo, id) {
 }
 
 // Converte o que o <input> devolve (sempre texto) para o tipo da coluna.
-function editar(tipo, id, campo, bruto, ehNumero) {
+async function editar(tipo, id, campo, bruto, ehNumero) {
   const linha = acharLinha(tipo, id);
   if (!linha) return;
+  // Porta de entrada de toda edição. Sem nome não grava: um histórico que diz
+  // "alguém mudou para EM COTAÇÃO" não responde a pergunta que se faz numa
+  // reunião de obra, que é quem destravou — ou quem parou — cada item.
+  if (!await exigirNome()) { render(); return; }
   let v = bruto;
   if (ehNumero) {
     // Aceita "1.234,56" (como as pessoas digitam) e "1234.56" (como colam da planilha).
@@ -268,9 +272,11 @@ function editar(tipo, id, campo, bruto, ehNumero) {
   }
   gravar(tipo, linha, campo, v);
 }
-function editarBool(tipo, id, campo, marcado) {
+async function editarBool(tipo, id, campo, marcado) {
   const linha = acharLinha(tipo, id);
-  if (linha) gravar(tipo, linha, campo, !!marcado);
+  if (!linha) return;
+  if (!await exigirNome()) { render(); return; }
+  gravar(tipo, linha, campo, !!marcado);
 }
 
 /* ============================================================
@@ -739,28 +745,59 @@ function exportarCSV(qual) {
    Sem login, por decisão: compras e fornecedores usam o link direto. O nome
    é o que dá rastro ao histórico — pedimos uma vez e guardamos no aparelho.
    ============================================================ */
-function perguntarQuemSou() {
+let _resolverNome = null;
+
+function perguntarQuemSou(obrigatorio) {
   const fundo = document.createElement('div');
   fundo.className = 'fundo';
   fundo.innerHTML = `<div class="modal">
     <h3>Quem está registrando?</h3>
-    <p>Seu nome aparece no histórico ao lado do que você alterar. Fica salvo neste aparelho — você só informa uma vez.</p>
+    <p>${obrigatorio
+      ? 'Antes de alterar, informe seu nome. Ele fica no histórico ao lado do que você mudar.'
+      : 'Seu nome aparece no histórico ao lado do que você alterar.'}
+      Fica salvo neste aparelho — você só informa uma vez.</p>
     <input id="campoNome" placeholder="Ex.: Fernando (Planejamento)" value="${esc(S.eu)}" maxlength="60">
+    <div id="erroNome" class="mini" style="color:var(--vermelho);margin:-10px 0 13px;display:none">
+      Escreva seu nome para continuar.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn" onclick="this.closest('.fundo').remove()">Cancelar</button>
+      <button class="btn" onclick="fecharQuemSou(false)">Cancelar</button>
       <button class="btn pri" onclick="salvarQuemSou()">Salvar</button>
     </div></div>`;
-  fundo.addEventListener('click', e => { if (e.target === fundo) fundo.remove(); });
+  // Clique fora só fecha quando o nome NÃO é obrigatório. Foi exatamente assim
+  // que o primeiro registro do app saiu sem autor: a caixa era dispensável sem
+  // querer, e a edição passava mesmo assim.
+  if (!obrigatorio) fundo.addEventListener('click', e => { if (e.target === fundo) fecharQuemSou(false); });
   document.body.appendChild(fundo);
   const campo = document.getElementById('campoNome');
   campo.focus();
   campo.addEventListener('keydown', e => { if (e.key === 'Enter') salvarQuemSou(); });
 }
+
 function salvarQuemSou() {
   const v = document.getElementById('campoNome').value.trim();
-  if (v) { S.eu = v; localStorage.setItem('rsc_compras_quem', v); }
-  document.querySelector('.fundo')?.remove();
+  if (!v) {
+    document.getElementById('erroNome').style.display = '';
+    document.getElementById('campoNome').focus();
+    return;
+  }
+  S.eu = v;
+  localStorage.setItem('rsc_compras_quem', v);
+  fecharQuemSou(true);
   renderCabecalho();
+}
+
+// Cancelar não é uma brecha: ele descarta a EDIÇÃO junto. Ou a pessoa se
+// identifica e a mudança é gravada, ou nada acontece — nunca mudança órfã.
+function fecharQuemSou(ok) {
+  document.querySelector('.fundo')?.remove();
+  const resolver = _resolverNome;
+  _resolverNome = null;
+  if (resolver) resolver(ok);
+}
+
+function exigirNome() {
+  if (S.eu) return Promise.resolve(true);
+  return new Promise(resolve => { _resolverNome = resolve; perguntarQuemSou(true); });
 }
 
 /* ============================================================
@@ -780,7 +817,9 @@ async function iniciar() {
   try {
     await carregar();
     render();
-    if (!S.eu) perguntarQuemSou();
+    // Sem pedir o nome de saída: quem só quer CONSULTAR a lista não deve
+    // esbarrar numa caixa. O nome é pedido na primeira edição, que é onde ele
+    // realmente importa.
   } catch (e) {
     document.getElementById('conteudo').innerHTML =
       `<div class="quadro"><div class="vazio">Não consegui carregar o acompanhamento.<br>
