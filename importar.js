@@ -16,6 +16,13 @@
    As chaves de reconciliação:
      contratações → nome da atividade
      materiais    → linha da PC + nome do material
+
+   ANTECEDÊNCIA
+   `antecedencia_dias` não está em CAMPOS_PLANEJAMENTO de propósito: a planilha
+   não tem essa coluna, e o prazo de fabricação por pacote é decisão de compras,
+   não do cronograma. Quem recalcula o prazo é o gatilho no banco (migration
+   0009) — a data limite que vier da planilha é sobrescrita quando o pacote tem
+   antecedência própria. Sem isso, reimportar devolvia todo mundo para 10 dias.
    ============================================================ */
 'use strict';
 

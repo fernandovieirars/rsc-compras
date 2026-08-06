@@ -148,6 +148,34 @@ de saída derruba e-mail legítimo que ninguém mapeou ainda.
 
 ---
 
+## Prazo de fabricação por pacote
+
+A obra tinha **uma** antecedência para tudo: 10 dias corridos entre fechar a
+compra e o material estar na obra. Herdado da planilha, e correto para o que a
+planilha cobria — argamassa, tinta, cimento.
+
+Não vale para o que entrou depois. Mobiliário escolar sob medida (22 itens,
+R$ 352 mil) leva 45 a 60 dias de fabricação; 35 computadores, 45; esquadria de
+madeira sob medida, 45. Com 10 dias para todos, o app dizia **NO PRAZO para
+item já perdido** — o mesmo defeito da planilha parada na caixa de entrada que
+este app existe para corrigir, só que por outro caminho.
+
+Agora `antecedencia_dias` no item vence a da obra, e o detalhe mostra a conta:
+
+```
+01/09/2026  −  [60] dias  =  03/07/2026
+```
+
+O recálculo é **gatilho no banco**, não JavaScript, porque a planilha é
+reimportada: sem ele, a próxima importação devolvia todo mundo para 10 dias e
+ninguém perceberia.
+
+⚠️ Os valores semeados são **estimativa de mercado, não cotação**. Servem para
+parar de mentir por omissão enquanto o prazo real não vem do fornecedor. São
+editáveis na tela — quando compras confirmar a entrega, é para trocar.
+
+---
+
 ## Guarda de permissões
 
 Roda de hora em hora (`reforcar_permissoes_compras`).

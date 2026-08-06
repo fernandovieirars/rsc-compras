@@ -461,7 +461,7 @@ function linhaContratacao(c) {
 
   const principal = `<tr class="${aberta ? 'aberta' : ''}">
     <td data-r="Item" class="mini">${c.item ?? ''}</td>
-    <td data-r="Serviço" class="atividade forte">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
+    <td data-r="Serviço" class="atividade forte"><div class="comprio">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></div></td>
     <td data-r="Início" class="mini">${fmtData(c.data_inicio) || '—'}</td>
     <td data-r="Término" class="mini">${fmtData(c.data_termino) || '—'}</td>
     <td data-r="Contratar até" class="forte">${fmtData(c.prazo_contratacao) || '—'}</td>
@@ -512,6 +512,7 @@ function linhaContratacao(c) {
       ${c.obs_composicao ? `<div class="nota" style="margin-top:9px">${esc(c.obs_composicao)}</div>` : ''}
       ${materiaisDaContratacao(c)}
     </div>
+    ${blocoAntecedencia(c)}
     <div class="bloco"><h4>Cotações</h4>${cotacoes}</div>
     <div class="bloco">
       <h4>Fechamento</h4>
@@ -534,6 +535,35 @@ function linhaContratacao(c) {
   </div></td></tr>`;
 
   return principal + detalhe;
+}
+
+// De onde sai a data de "contratar até". Fica visível e editável porque a
+// antecedência era invisível: 10 dias para tudo, inclusive mobiliário sob
+// medida, e o app dizia NO PRAZO para item já perdido. Quem cobra o prazo
+// precisa poder ver a conta — e quem tem o prazo real do fornecedor precisa
+// poder corrigi-la sem pedir para o TI.
+function blocoAntecedencia(c) {
+  const padrao = par('antecedencia_dias', 10);
+  const dias = c.antecedencia_dias ?? padrao;
+  const proprio = c.antecedencia_dias != null;
+  return `<div class="bloco">
+    <h4>De onde vem o prazo</h4>
+    <div class="conta">
+      <span>${fmtData(c.data_inicio) || '—'}</span>
+      <span class="op">−</span>
+      <input class="ed n dias" type="number" min="0" max="365" value="${dias}"
+        onchange="editar('contratacao','${c.id}','antecedencia_dias',this.value,true)">
+      <span class="op">dias =</span>
+      <b>${fmtData(c.prazo_contratacao) || '—'}</b>
+    </div>
+    <div class="mini" style="margin-top:7px">
+      Dias corridos entre fechar o contrato e a atividade poder começar.
+      ${proprio ? 'Definido para este pacote.' : `Usando o padrão da obra (${padrao} dias).`}
+    </div>
+    ${proprio && dias > padrao ? `<div class="nota" style="margin-top:9px">
+      Estimativa de mercado para fabricação sob medida — não é prazo de fornecedor.
+      Quando compras confirmar a entrega real, troque aqui.</div>` : ''}
+  </div>`;
 }
 
 // A fila de negociação que o planejamento passou aos compradores. Não é o
@@ -829,7 +859,7 @@ function telaRelatorio() {
     const pend = ms.filter(m => !m.comprado).length;
     const f = farolDe(c);
     return `<tr>
-      <td data-r="Serviço" class="atividade forte">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></td>
+      <td data-r="Serviço" class="atividade forte"><div class="comprio">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></div></td>
       <td data-r="Contratar até">${fmtData(c.prazo_contratacao) || '—'}</td>
       <td data-r="Situação">${f ? `<span class="selo ${classeSelo(f)}">${rotuloSituacao(f)}</span>` : '—'}</td>
       <td data-r="Contratação" class="mini">${c.contratado

@@ -99,7 +99,19 @@ td.material .mini{display:block;margin-top:2px}
 .prio{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;
   border-radius:5px;background:var(--tinta);color:var(--amarelo);font:800 11px var(--fonte);
   padding:0 5px;margin-right:6px;vertical-align:middle}
-.prio.vazio{background:var(--borda-2);color:var(--fraco)}
+.prio.vazio{background:transparent;color:var(--borda);border:1px dashed var(--borda)}
+/* O selo e o nome na mesma linha: .corta é block (precisa ser, para o
+   ellipsis funcionar), então sem o flex o nome caía para baixo do selo. */
+.comprio{display:flex;align-items:center;min-width:0}
+.comprio .corta{flex:1;min-width:0}
+
+/* A conta do prazo, mostrada como conta mesmo: data − dias = prazo. Era um
+   número que aparecia pronto e ninguém sabia de onde vinha. */
+.conta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:13px;
+  background:#fff;border:1px solid var(--borda);border-radius:7px;padding:9px 11px}
+.conta .op{color:var(--fraco);font-size:12px}
+.conta b{font-variant-numeric:tabular-nums}
+.ed.dias{width:62px;flex:0 0 auto;border-color:var(--borda);background:#fff;text-align:center}
 
 /* ── Selos ─────────────────────────────────────────────── */
 .selo{display:inline-block;padding:2.5px 9px;border-radius:999px;font:700 10.5px var(--fonte);
