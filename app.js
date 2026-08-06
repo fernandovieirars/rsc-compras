@@ -138,6 +138,15 @@ function fmtMoedaCurta(v) {
 function fmtNum(v) {
   return (v === null || v === undefined || v === '') ? '—' : numBR.format(Number(v));
 }
+// Campo de dinheiro. Mostra "98.000" em vez de "98000" — o valor cru numa
+// coluna de moeda faz a pessoa conferir duas vezes se são 98 mil ou 980 mil.
+// Não precisa de máscara: o parser do editar() já aceita "1.234,56" e "1234.56".
+function campoMoeda(tipo, id, campo, valor) {
+  const v = (valor === null || valor === undefined || valor === '') ? '' : numBR.format(Number(valor));
+  return `<input class="ed n" value="${v}" placeholder="—"
+    onchange="editar('${tipo}','${id}','${campo}',this.value,true)">`;
+}
+
 function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -151,6 +160,44 @@ function esc(s) {
 function rotuloSituacao(t) {
   return { 'OK': 'NO PRAZO', 'PROGRAMADO': 'NO PRAZO' }[t] || t;
 }
+
+/* ------------------------------------------------------------
+   ESTADO DA LINHA — a cor que a pessoa lê antes de ler qualquer texto.
+
+   São dois eixos diferentes, e misturá-los era o que tornava a tela cansativa:
+
+     SITUAÇÃO (selo)  = o prazo aperta?   → vem do cronograma, ninguém controla
+     ESTADO (cor)     = alguém está agindo? → vem de compras, é o que dá para mudar
+
+   Um item pode estar ATRASADO e amarelo: venceu, mas tem gente cotando. E pode
+   estar NO PRAZO e sem cor nenhuma: não venceu e ninguém precisou tocar ainda.
+   O vermelho fica reservado para o cruzamento que ninguém quer e que a tela
+   antiga não mostrava — venceu E está parado.
+   ------------------------------------------------------------ */
+function temMovimento(it) {
+  if (it.status_processo && it.status_processo !== 'PENDENTE') return true;
+  if (it.status_compra && it.status_compra !== 'PENDENTE') return true;
+  if (it.fornecedor_escolhido || it.fornecedor) return true;
+  if (it.valor_unit_cotado != null || it.valor_contratado != null) return true;
+  return [1, 2, 3].some(i => it[`cot${i}_fornecedor`] || it[`cot${i}_valor`] != null);
+}
+
+function estadoLinha(it) {
+  const st = it.status_processo || it.status_compra;
+  if (st === 'NÃO SE APLICA') return 'na';
+  if (it.contratado || it.comprado || ['CONTRATADO', 'COMPRADO', 'ENTREGUE'].includes(st)) return 'fechado';
+  const vencido = (it.prazo_contratacao ? farolDe(it) : prioridadeDe(it)) === 'ATRASADO';
+  if (vencido && !temMovimento(it)) return 'parado';
+  if (temMovimento(it)) return 'andando';
+  return '';
+}
+
+const LEGENDA = `<div class="legenda">
+  <span><i class="pt fechado"></i>fechado</span>
+  <span><i class="pt andando"></i>alguém está cotando</span>
+  <span><i class="pt parado"></i>venceu e ninguém tocou</span>
+  <span><i class="pt"></i>no prazo, ainda não começou</span>
+</div>`;
 
 function classeSelo(t) {
   return { 'ATRASADO': 'atrasado', 'URGENTE': 'urgente', 'ATENÇÃO': 'atencao',
@@ -424,7 +471,7 @@ function telaContratacoes() {
     <button class="btn" onclick="exportarCSV('contratacoes')">↓ CSV</button>
     <button class="btn" onclick="window.print()">🖨 Imprimir</button>
     <button class="btn pri" onclick="abrirImportador('contratacoes')">↻ Atualizar da planilha</button>
-  </div>`;
+  </div>` + LEGENDA;
 
   const linhas = todos.filter(c => {
     const f = farolDe(c);
@@ -457,23 +504,28 @@ function linhaContratacao(c) {
   const f = farolDe(c);
   const acao = acaoContratacao(c.prazo_contratacao, f);
   const aberta = S.abertos.has(c.id);
+  const estado = estadoLinha(c);
+  // Item fechado ou fora de escopo não pede mais nada. Continuar mostrando
+  // "CONTRATAR ATÉ 07/08" em vermelho num serviço já contratado treina a pessoa
+  // a ignorar o vermelho — e aí ele para de funcionar onde importa.
+  const encerrado = estado === 'fechado' || estado === 'na';
   const na = c.status_processo === 'NÃO SE APLICA';
 
-  const principal = `<tr class="${aberta ? 'aberta' : ''}">
+  const principal = `<tr class="est-${estadoLinha(c) || 'neutro'} ${aberta ? 'aberta' : ''}">
     <td data-r="Item" class="mini">${c.item ?? ''}</td>
     <td data-r="Serviço" class="atividade forte"><div class="comprio">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></div></td>
     <td data-r="Início" class="mini">${fmtData(c.data_inicio) || '—'}</td>
     <td data-r="Término" class="mini">${fmtData(c.data_termino) || '—'}</td>
     <td data-r="Contratar até" class="forte">${fmtData(c.prazo_contratacao) || '—'}</td>
-    <td data-r="Ação"><span class="acao ${acao === 'OK' ? 'ok' : 'pede'}">${na ? '—' : esc(rotuloSituacao(acao))}</span></td>
-    <td data-r="Situação">${(f && !na) ? `<span class="selo ${classeSelo(f)}">${rotuloSituacao(f)}</span>` : '<span class="selo neutro">—</span>'}</td>
+    <td data-r="Ação"><span class="acao ${encerrado ? 'feito' : acao === 'OK' ? 'ok' : 'pede'}">${
+      estado === 'fechado' ? '✓ contratado' : na ? '—' : esc(rotuloSituacao(acao))}</span></td>
+    <td data-r="Situação">${(f && !encerrado) ? `<span class="selo ${classeSelo(f)}">${rotuloSituacao(f)}</span>` : '<span class="selo neutro">—</span>'}</td>
     <td data-r="Status"><select class="ed ${classeStatus(c.status_processo)}"
         onchange="editar('contratacao','${c.id}','status_processo',this.value)">
       ${STATUS_CTR.map(s => `<option ${c.status_processo === s ? 'selected' : ''}>${s}</option>`).join('')}
     </select></td>
     <td data-r="Referência PC" class="num">${fmtMoeda(c.valor_pc_total)}</td>
-    <td data-r="Contratado" class="num"><input class="ed n" value="${c.valor_contratado ?? ''}" placeholder="—"
-        onchange="editar('contratacao','${c.id}','valor_contratado',this.value,true)"></td>
+    <td data-r="Contratado" class="num">${campoMoeda('contratacao', c.id, 'valor_contratado', c.valor_contratado)}</td>
     <td class="semrot"><button class="expandir" onclick="alternar('${c.id}')" title="Cotações e detalhes">${aberta ? '▾' : '▸'}</button></td>
   </tr>`;
 
@@ -494,8 +546,7 @@ function linhaContratacao(c) {
             .map(e => `<option ${c[`cot${i}_escopo`] === e ? 'selected' : ''}>${e}</option>`).join('')}
         </select></div>
       <div class="campo"><label>Valor cotado</label>
-        <input class="ed n" value="${valor ?? ''}" placeholder="—"
-          onchange="editar('contratacao','${c.id}','cot${i}_valor',this.value,true)"></div>
+        ${campoMoeda('contratacao', c.id, `cot${i}_valor`, valor)}</div>
     </div>`;
   }).join('');
 
@@ -520,8 +571,7 @@ function linhaContratacao(c) {
         <input class="ed" value="${esc(c.fornecedor_escolhido || '')}" placeholder="quem fechou"
           onchange="editar('contratacao','${c.id}','fornecedor_escolhido',this.value)"></div>
       <div class="campo"><label>Valor contratado</label>
-        <input class="ed n" value="${c.valor_contratado ?? ''}" placeholder="—"
-          onchange="editar('contratacao','${c.id}','valor_contratado',this.value,true)"></div>
+        ${campoMoeda('contratacao', c.id, 'valor_contratado', c.valor_contratado)}</div>
       <div class="campo"><label>Data da contratação</label>
         <input type="date" class="ed" value="${c.data_contratacao || ''}"
           onchange="editar('contratacao','${c.id}','data_contratacao',this.value)"></div>
@@ -572,7 +622,7 @@ function blocoAntecedencia(c) {
 function seloPrioridade(c) {
   return c.prioridade_fechamento
     ? `<span class="prio" title="Prioridade ${c.prioridade_fechamento} de fechamento">${c.prioridade_fechamento}</span>`
-    : `<span class="prio vazio" title="Sem prioridade de fechamento definida">–</span>`;
+    : `<span class="prio sem" title="Sem prioridade de fechamento definida">–</span>`;
 }
 
 function menorCotacao(c) {
@@ -624,7 +674,7 @@ function telaMateriais() {
     <button class="btn" onclick="exportarCSV('materiais')">↓ CSV</button>
     <button class="btn" onclick="window.print()">🖨 Imprimir</button>
     <button class="btn pri" onclick="abrirImportador('materiais')">↻ Atualizar da planilha</button>
-  </div>`;
+  </div>` + LEGENDA;
 
   const linhas = todos.filter(m => {
     const p = prioridadeDe(m);
@@ -658,9 +708,11 @@ function linhaMaterial(m) {
   const p = prioridadeDe(m);
   const acao = acaoMaterial(m.data_limite_compra, p);
   const aberta = S.abertos.has(m.id);
+  const estado = estadoLinha(m);
+  const encerrado = estado === 'fechado' || estado === 'na';   // mesma regra da contratação
   const na = m.status_compra === 'NÃO SE APLICA';
 
-  const principal = `<tr class="${aberta ? 'aberta' : ''}">
+  const principal = `<tr class="est-${estadoLinha(m) || 'neutro'} ${aberta ? 'aberta' : ''}">
     <td data-r="Linha PC" class="mini forte">${esc(m.linha_pc)}</td>
     <td data-r="Material" class="material"><span class="nome">${esc(m.material)}</span>
       <span class="mini">${esc(m.atividade || '')}</span></td>
@@ -668,8 +720,9 @@ function linhaMaterial(m) {
     <td data-r="Qtd" class="num">${fmtNum(m.quantidade)}</td>
     <td data-r="Custo PC" class="num">${fmtMoeda(m.custo_total_pc)}</td>
     <td data-r="Comprar até" class="forte empilha">${fmtData(m.data_limite_compra) || '—'}
-      <span class="acao ${acao === 'OK' ? 'ok' : 'pede'}">${na ? '' : esc(rotuloSituacao(acao))}</span></td>
-    <td data-r="Prioridade">${(p && !na) ? `<span class="selo ${classeSelo(p)}">${rotuloSituacao(p)}</span>` : '<span class="selo neutro">—</span>'}</td>
+      <span class="acao ${encerrado ? 'feito' : acao === 'OK' ? 'ok' : 'pede'}">${
+        estado === 'fechado' ? (m.entrega_realizada ? '✓ entregue' : '✓ comprado') : na ? '' : esc(rotuloSituacao(acao))}</span></td>
+    <td data-r="Prioridade">${(p && !encerrado) ? `<span class="selo ${classeSelo(p)}">${rotuloSituacao(p)}</span>` : '<span class="selo neutro">—</span>'}</td>
     <td data-r="Status"><select class="ed ${classeStatus(m.status_compra)}"
         onchange="editar('material','${m.id}','status_compra',this.value)">
       ${STATUS_MAT.map(s => `<option ${m.status_compra === s ? 'selected' : ''}>${s}</option>`).join('')}
@@ -703,8 +756,7 @@ function linhaMaterial(m) {
         <input class="ed" value="${esc(m.fornecedor || '')}" placeholder="nome do fornecedor"
           onchange="editar('material','${m.id}','fornecedor',this.value)"></div>
       <div class="campo"><label>Valor unitário cotado</label>
-        <input class="ed n" value="${m.valor_unit_cotado ?? ''}" placeholder="—"
-          onchange="editar('material','${m.id}','valor_unit_cotado',this.value,true)"></div>
+        ${campoMoeda('material', m.id, 'valor_unit_cotado', m.valor_unit_cotado)}</div>
       <div class="linha"><span>Total cotado</span><span><b>${fmtMoeda(m.valor_total_cotado)}</b></span></div>
       <button class="btn" style="margin-top:9px;width:100%" onclick="pedirCotacao('${m.id}')"
         title="Abre seu e-mail com material, quantidade e prazo já preenchidos">✉ Pedir cotação</button>

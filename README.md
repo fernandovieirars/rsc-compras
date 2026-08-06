@@ -148,6 +148,34 @@ de saída derruba e-mail legítimo que ninguém mapeou ainda.
 
 ---
 
+## A cor da linha
+
+A tela mostra **dois eixos diferentes**, e misturá-los era o que a tornava
+cansativa de ler:
+
+| | responde | vem de |
+|---|---|---|
+| **Situação** (selo) | o prazo aperta? | cronograma — ninguém controla |
+| **Estado** (cor da linha) | alguém está agindo? | compras — é o que dá para mudar |
+
+| Cor | Significa |
+|---|---|
+| 🟢 verde | fechado — contratado, comprado ou entregue |
+| 🟡 amarelo | alguém está cotando ou negociando |
+| 🔴 vermelho | **venceu e ninguém tocou** |
+| cinza | no prazo, ainda não começou |
+
+O vermelho fica reservado ao cruzamento que a tela antiga não mostrava. Um item
+pode estar `ATRASADO` e amarelo — venceu, mas tem gente cotando; e pode estar
+`NO PRAZO` e sem cor — não venceu e ninguém precisou tocar. Quem abre o app de
+manhã procura o vermelho, e ele significa uma coisa só: **parado e vencido**.
+
+Item fechado para de pedir ação. Continuar mostrando `CONTRATAR ATÉ 07/08` em
+vermelho num serviço já contratado treina a pessoa a ignorar o vermelho — e aí
+ele deixa de funcionar onde importa.
+
+---
+
 ## Prazo de fabricação por pacote
 
 A obra tinha **uma** antecedência para tudo: 10 dias corridos entre fechar a
