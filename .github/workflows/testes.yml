@@ -23,5 +23,7 @@ jobs:
         run: node testes/email.test.js
       - name: Regressão do acompanhamento com várias obras
         run: node testes/obras.test.js
+      - name: Regressão da referência de PC contada duas vezes
+        run: node testes/referencia-pc.test.js
       - name: Sintaxe dos scripts
         run: node --check app.js && node --check importar.js

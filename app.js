@@ -570,6 +570,32 @@ function blocoPrimeiraImportacao(tipo) {
   </div>`;
 }
 
+/* ---- Referência da PC ----
+   Uma linha marcada como `referencia_compartilhada` tem os valores já contados
+   dentro de outro pacote — na Escola é a 2.6.3, que responde sozinha pela
+   Pintura externa e também está no bloco 2.6 da Pintura interna. Somar as duas
+   inflava o total da obra em R$ 58.770,77 (2,5%).
+
+   A linha NÃO sai da tela e continua com a referência dela na coluna: para o
+   contrato daquele serviço o valor é real, e é por ele que a cotação da fachada
+   vai ser comparada. O que não vale é o somatório — e é só ele que muda aqui. */
+function pcReferencia(lista) {
+  return lista.filter(c => !c.referencia_compartilhada)
+              .reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+}
+function pcRepetida(lista) {
+  return lista.filter(c => c.referencia_compartilhada)
+              .reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+}
+// Rodapé do cartão: quando algo ficou de fora, dizer quanto e por quê. Total que
+// encolhe sem explicação faz a pessoa achar que o app perdeu dado.
+function pePcReferencia(lista) {
+  const fora = pcRepetida(lista);
+  return fora
+    ? `sem ${fmtMoedaCurta(fora)} de referência repetida`
+    : 'mão de obra + material';
+}
+
 /* ---- KPIs ---- */
 function kpi(rot, val, pe, cor, corVal) {
   return `<div class="kpi ${cor || ''}"><div class="rot">${rot}</div>
@@ -584,8 +610,14 @@ function telaContratacoes() {
   const atras = todos.filter(c => farolDe(c) === 'ATRASADO').length;
   const aten = todos.filter(c => farolDe(c) === 'ATENÇÃO').length;
   const andam = todos.filter(c => ['EM COTAÇÃO', 'EM NEGOCIAÇÃO'].includes(c.status_processo)).length;
-  const pcTotal = todos.reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+  const pcTotal = pcReferencia(todos);
   const fechado = todos.reduce((s, c) => s + Number(c.valor_contratado || 0), 0);
+  // Esta soma NÃO exclui a referência compartilhada, de propósito. Ela compara o
+  // que foi fechado contra a PC dos MESMOS contratos: se a fachada virar contrato
+  // próprio, o valor dela é gasto real e a referência dela é o parâmetro daquela
+  // cotação. Os dois lados contam a mesma coisa, e a comparação continua honesta.
+  // Se um dia a pintura interna E a externa forem contratadas separadamente, aqui
+  // vai aparecer escopo pago duas vezes — que é informação, não defeito.
   const pcDosFechados = todos.filter(c => c.valor_contratado != null)
                              .reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
   const desvio = fechado - pcDosFechados;
@@ -596,7 +628,7 @@ function telaContratacoes() {
     ${kpi('Em cotação', andam, 'cotação/negociação', 'b')}
     ${kpi('Atrasados', atras, 'prazo vencido', 'r', atras ? 'r' : '')}
     ${kpi('Atenção', aten, `vencem em ${par('alerta_atencao_dias', 5)} dias`, 'a', aten ? 'o' : '')}
-    ${kpi('Referência PC', fmtMoedaCurta(pcTotal), 'mão de obra + material', '')}
+    ${kpi('Referência PC', fmtMoedaCurta(pcTotal), pePcReferencia(todos), '')}
     ${kpi('Contratado', fmtMoedaCurta(fechado), pcDosFechados
         ? `${desvio <= 0 ? '▼' : '▲'} ${fmtMoedaCurta(Math.abs(desvio))} vs PC` : 'nada fechado ainda',
         '', desvio <= 0 ? 'g' : 'r')}
@@ -663,7 +695,10 @@ function linhaContratacao(c) {
         onchange="editar('contratacao','${c.id}','status_processo',this.value)">
       ${STATUS_CTR.map(s => `<option ${c.status_processo === s ? 'selected' : ''}>${s}</option>`).join('')}
     </select></td>
-    <td data-r="Referência PC" class="num">${fmtMoeda(c.valor_pc_total)}</td>
+    <td data-r="Referência PC" class="num">${fmtMoeda(c.valor_pc_total)}${
+      c.referencia_compartilhada
+        ? `<span class="repetida" title="Estes valores já estão contados em outro pacote da PC — a linha vale para o contrato dela, mas fica fora do total da obra.">já contada</span>`
+        : ''}</td>
     <td data-r="Contratado" class="num">${campoMoeda('contratacao', c.id, 'valor_contratado', c.valor_contratado)}</td>
     <td class="semrot"><button class="expandir" onclick="alternar('${c.id}')" title="Cotações e detalhes">${aberta ? '▾' : '▸'}</button></td>
   </tr>`;
@@ -1011,7 +1046,7 @@ function telaRelatorio() {
   const contratados = ctr.filter(c => c.contratado).length;
   const comprados = mat.filter(m => m.comprado).length;
   const entregues = mat.filter(m => m.status_compra === 'ENTREGUE').length;
-  const pcCtr = ctr.reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+  const pcCtr = pcReferencia(ctr);
   const pcMat = mat.reduce((s, m) => s + Number(m.custo_total_pc || 0), 0);
   const fechado = ctr.reduce((s, c) => s + Number(c.valor_contratado || 0), 0);
   const cotados = mat.filter(m => m.valor_total_cotado != null);
@@ -1028,7 +1063,7 @@ function telaRelatorio() {
     ${kpi('Prazo da obra', diasObra === null ? '—' : (diasObra >= 0 ? `${diasObra} d` : `${-diasObra} d`),
         diasObra === null ? '' : (diasObra >= 0 ? `até ${fmtData(S.obra.termino_obra)}` : 'em atraso'),
         'b', diasObra !== null && diasObra < 0 ? 'r' : '')}
-    ${kpi('Referência PC', fmtMoedaCurta(pcCtr), 'mão de obra + material', '')}
+    ${kpi('Referência PC', fmtMoedaCurta(pcCtr), pePcReferencia(ctr), '')}
     ${kpi('Já fechado', fmtMoedaCurta(fechado + cotado), 'contratado + cotado', 'g')}
   </div>`;
 
@@ -1103,7 +1138,9 @@ function telaRelatorio() {
       <div class="det" style="padding:0">
         <div class="bloco">
           <h4>Terceirizadas</h4>
-          <div class="linha"><span>Referência PC (${ctr.length} serviço${ctr.length === 1 ? '' : 's'})</span><span>${fmtMoeda(pcCtr)}</span></div>
+          <div class="linha"><span>Referência PC (${ctr.filter(c => !c.referencia_compartilhada).length} serviço${
+            ctr.filter(c => !c.referencia_compartilhada).length === 1 ? '' : 's'}${
+            pcRepetida(ctr) ? ', fora a referência repetida' : ''})</span><span>${fmtMoeda(pcCtr)}</span></div>
           <div class="linha"><span>Contratado até agora</span><span><b>${fmtMoeda(fechado)}</b></span></div>
         </div>
         <div class="bloco">

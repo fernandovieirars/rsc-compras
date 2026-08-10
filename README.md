@@ -125,12 +125,37 @@ São 156 verificações, incluindo as bordas das janelas e o horário de verão.
 3. **`Total cotado` só soma itens efetivamente cotados.** Somar item sem preço
    como zero faria a comparação com a PC parecer uma economia que não existe.
 
-### Um dado que ficou como está
+### A linha que aparece em dois pacotes
 
-O material 58 (*Pintura de paredes*, linha PC 2.6.3) não tem contratação
-correspondente: na PC essa linha é **compartilhada** entre pintura interna e
-externa. Ficou sem vínculo de propósito, com a observação de origem preservada —
-somá-la nas duas contaria o custo em dobro.
+O material 58 (*Pintura de paredes*, linha PC 2.6.3) é **referência compartilhada**:
+ele responde sozinho pelo pacote 14 (*Pintura externa*) e também está dentro do
+bloco 2.6 do pacote 13 (*Pintura interna*).
+
+Somando os 18 pacotes direto, **R$ 58.770,77 entram duas vezes** — o total da obra
+vira R$ 2.368.296,64 em vez de R$ 2.309.525,86, 2,5% a mais. A prova de que a
+leitura está certa: tirando a 2.6.3, o material somado pelos pacotes bate com a
+soma dos 102 itens da planilha de materiais (R$ 1.270.239,20), a menos de um
+centavo de arredondamento.
+
+Os dois pacotes continuam existindo, porque a fachada pode ir para outro
+empreiteiro e precisa do seu próprio prazo e contrato. O que muda é só o
+somatório: a coluna `referencia_compartilhada` (migration 0012) marca a linha, o
+cartão **Referência PC** a exclui e diz quanto ficou de fora, e a linha segue na
+tela com a referência dela e um aviso *já contada*.
+
+Duas coisas de propósito, e que o teste trava:
+
+- **A comparação por contrato não exclui.** `Contratado × PC` compara o que foi
+  fechado contra a PC dos mesmos contratos; os dois lados contam a mesma coisa.
+  Se um dia a pintura interna e a externa forem contratadas separadamente, ali
+  vai aparecer escopo pago em dobro — que é informação, não defeito.
+- **A marca não entra em `CAMPOS_PLANEJAMENTO`.** Reimportar a planilha não pode
+  apagá-la, do mesmo jeito que não apaga fornecedor nem cotação.
+
+Há ainda um ponto a conferir antes de emitir pedido, que não é soma em dobro: os
+códigos `5.3.1` e `5.3.2` estão **duplicados na PC REV05** — servem tanto ao
+mobiliário quanto à informática, com valores diferentes. São itens distintos; o
+que falha é o código identificar o item sozinho.
 
 ---
 
@@ -369,6 +394,7 @@ npx http-server . -p 8080     # ou qualquer servidor estático
 node testes/calculo.test.js   # prazos, contra os valores do Excel
 node testes/email.test.js     # acentuação e escolha do transporte
 node testes/obras.test.js     # qual obra abrir, criação por RPC, obra vazia
+node testes/referencia-pc.test.js  # referência de PC contada duas vezes
 ```
 
 Abrir por `file://` também funciona para inspecionar as telas.
