@@ -12,7 +12,22 @@
 // vermelho. Ler a view é o que garante que o e-mail e o app contem a mesma
 // história.
 //
+// COMO O E-MAIL SAI DAQUI
+// Pelo Microsoft Graph, usando a app registration que a Rio Sul já tem no Entra
+// (remetente noreply@riosulconstrucoes.com.br). Não depende de domínio
+// verificado em serviço de terceiro — que é exatamente o que segurou este
+// alerta: o Resend ficou em modo de teste esperando registros de DNS que
+// ninguém publicou, e em modo de teste ele só entrega ao dono da conta. O
+// alerta "funcionava" e não chegava a ninguém.
+//
+// O Resend continua como PLANO B, e a escolha é do ambiente, não de um
+// parâmetro: sem os três secrets do Graph a função cai nele sozinha e nada
+// piora; publicados os secrets, o Graph assume na chamada seguinte, sem tocar
+// em código nem redeployar. Quem enviou fica gravado em
+// compras_envio_log.resumo.via, para o diagnóstico não depender de adivinhação.
+//
 // ?dry=1   monta tudo e devolve o HTML sem enviar
+// ?diag=1  diz qual transporte está ativo e quais secrets faltam (nunca valores)
 // ?obra=   slug da obra (padrão: todas as obras cadastradas)
 // =====================================================================
 
@@ -23,6 +38,16 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const FROM_EMAIL = Deno.env.get('NOTIF_FROM_EMAIL') || 'onboarding@resend.dev';
 const APP_URL = Deno.env.get('COMPRAS_APP_URL') || 'https://rsc-compras-obra.vercel.app';
+
+// Os três do Graph são secrets do PROJETO (não da função) e vêm da mesma app
+// registration já usada pelo resto da Rio Sul. Precisa da permissão de
+// APLICAÇÃO `Mail.Send`, com consentimento do administrador — a delegada não
+// serve, porque aqui não há ninguém logado.
+const GRAPH_TENANT = Deno.env.get('GRAPH_TENANT_ID') || '';
+const GRAPH_CLIENT = Deno.env.get('GRAPH_CLIENT_ID') || '';
+const GRAPH_SECRET = Deno.env.get('GRAPH_CLIENT_SECRET') || '';
+const GRAPH_FROM = Deno.env.get('GRAPH_FROM') || 'noreply@riosulconstrucoes.com.br';
+const TEM_GRAPH = !!(GRAPH_TENANT && GRAPH_CLIENT && GRAPH_SECRET);
 
 const sb = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -40,7 +65,79 @@ const COR: Record<string, string> = {
   'PRÓXIMO': '#b78103', OK: '#067647', PROGRAMADO: '#067647',
 };
 
-async function enviarEmail(to: string, assunto: string, html: string) {
+// O corpo vai ao Graph em JSON puro-ASCII, escapando tudo acima de 0x7F. Não é
+// preciosismo: este caminho já corrompeu acentuação no app de planejamento, e
+// aqui o assunto carrega "contratações" e os selos dizem "ATENÇÃO" e "PRÓXIMO" —
+// sairia ilegível justamente na linha que pede ação.
+function jsonAscii(o: unknown): string {
+  return JSON.stringify(o).replace(/[\u0080-\uffff]/g, (c) =>
+    '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+}
+
+// O token vale cerca de uma hora, e esta função varre várias obras com vários
+// destinatários cada. Pedir um token por e-mail multiplicaria a ida ao Entra
+// sem trazer nada.
+let tokenCache: { valor: string; expira: number } | null = null;
+
+async function tokenGraph(): Promise<{ ok: true; token: string } | { ok: false; erro: string }> {
+  if (tokenCache && Date.now() < tokenCache.expira) return { ok: true, token: tokenCache.valor };
+  try {
+    const r = await fetch(`https://login.microsoftonline.com/${GRAPH_TENANT}/oauth2/v2.0/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GRAPH_CLIENT,
+        client_secret: GRAPH_SECRET,
+        scope: 'https://graph.microsoft.com/.default',
+        grant_type: 'client_credentials',
+      }),
+    });
+    const t = await r.json();
+    if (!t.access_token) {
+      return { ok: false, erro: `Entra ${r.status}: ${t.error_description || t.error || 'sem access_token'}` };
+    }
+    // Margem de um minuto, para não pegar um token que vence no meio do laço.
+    tokenCache = {
+      valor: t.access_token,
+      expira: Date.now() + ((Number(t.expires_in) || 3600) - 60) * 1000,
+    };
+    return { ok: true, token: t.access_token };
+  } catch (e) {
+    return { ok: false, erro: String(e) };
+  }
+}
+
+async function enviarPorGraph(to: string, assunto: string, html: string) {
+  const tk = await tokenGraph();
+  if (!tk.ok) return { ok: false, erro: tk.erro };
+  try {
+    const r = await fetch(
+      `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(GRAPH_FROM)}/sendMail`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tk.token}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: jsonAscii({
+          message: {
+            subject: assunto,
+            body: { contentType: 'HTML', content: html },
+            toRecipients: [{ emailAddress: { address: to } }],
+          },
+          saveToSentItems: false,
+        }),
+      },
+    );
+    // O Graph aceita e responde 202, com corpo vazio. Qualquer outra coisa é erro.
+    if (r.status !== 202) return { ok: false, erro: `Graph ${r.status}: ${(await r.text()).slice(0, 300)}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: String(e) };
+  }
+}
+
+async function enviarPorResend(to: string, assunto: string, html: string) {
   if (!RESEND_KEY) return { ok: false, erro: 'RESEND_API_KEY não configurada' };
   try {
     const r = await fetch('https://api.resend.com/emails', {
@@ -53,6 +150,21 @@ async function enviarEmail(to: string, assunto: string, html: string) {
   } catch (e) {
     return { ok: false, erro: String(e) };
   }
+}
+
+// Graph quando há credencial, Resend quando não há.
+export function escolherTransporte(temGraph: boolean): 'graph' | 'resend' {
+  return temGraph ? 'graph' : 'resend';
+}
+
+async function enviarEmail(
+  to: string, assunto: string, html: string,
+): Promise<{ ok: boolean; erro?: string; via: string }> {
+  const via = escolherTransporte(TEM_GRAPH);
+  const r = via === 'graph'
+    ? await enviarPorGraph(to, assunto, html)
+    : await enviarPorResend(to, assunto, html);
+  return { ...r, via };
 }
 
 function selo(t: string | null) {
@@ -105,7 +217,8 @@ function montarHtml(obra: any, ctr: any[], mat: any[]) {
         <div style="font:700 22px Arial,sans-serif;color:${cor};margin-top:4px">${val}</div>
       </div></td>`;
 
-  return `<!doctype html><html><body style="margin:0;background:#f6f5f1;padding:18px 10px">
+  return `<!doctype html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;background:#f6f5f1;padding:18px 10px">
 <div style="max-width:660px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.07)">
 
   <div style="background:#1c1c1e;padding:17px 22px;border-bottom:3px solid #ffd900">
@@ -186,6 +299,18 @@ Deno.serve(async (req) => {
   const dry = url.searchParams.get('dry') === '1';
   const slug = url.searchParams.get('obra');
 
+  // Diagnóstico: responde o que está configurado, nunca o valor de um segredo.
+  // Serve para saber por que o e-mail não chegou sem precisar abrir o painel.
+  if (url.searchParams.get('diag') === '1') {
+    const faltando = ['GRAPH_TENANT_ID', 'GRAPH_CLIENT_ID', 'GRAPH_CLIENT_SECRET']
+      .filter((n) => !Deno.env.get(n));
+    return new Response(JSON.stringify({
+      transporte_ativo: escolherTransporte(TEM_GRAPH),
+      graph: { configurado: TEM_GRAPH, remetente: GRAPH_FROM, faltando },
+      resend: { configurado: !!RESEND_KEY, remetente: FROM_EMAIL },
+    }, null, 2), { headers: { ...cors, 'Content-Type': 'application/json' } });
+  }
+
   let q = sb.from('compras_obra').select('*');
   if (slug) q = q.eq('slug', slug);
   const { data: obras, error: erroObras } = await q;
@@ -225,19 +350,24 @@ Deno.serve(async (req) => {
     }
 
     for (const d of dest) {
-      if (dry) { envios.push({ email: d.email, status: 'dry-run' }); continue; }
+      if (dry) { envios.push({ email: d.email, status: 'dry-run', via: escolherTransporte(TEM_GRAPH) }); continue; }
       const r = await enviarEmail(d.email, assunto, html);
       await sb.from('compras_envio_log').insert({
         obra_id: obra.id, destinatario: d.email, assunto,
-        status: r.ok ? 'enviado' : 'erro', erro: r.erro || null, resumo,
+        status: r.ok ? 'enviado' : 'erro', erro: r.erro || null,
+        // `via` entra no resumo (jsonb) — assim saber por onde saiu cada e-mail
+        // não custou uma coluna nova nem uma migration.
+        resumo: { ...resumo, via: r.via },
       });
-      envios.push({ email: d.email, status: r.ok ? 'enviado' : 'erro', erro: r.erro });
+      envios.push({ email: d.email, status: r.ok ? 'enviado' : 'erro', via: r.via, erro: r.erro });
     }
 
     relatorio.push({ obra: obra.nome, assunto, resumo, envios, ...(dry ? { html } : {}) });
   }
 
-  return new Response(JSON.stringify({ sucesso: true, dry_run: dry, relatorio }, null, 2), {
+  return new Response(JSON.stringify({
+    sucesso: true, dry_run: dry, transporte: escolherTransporte(TEM_GRAPH), relatorio,
+  }, null, 2), {
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
 });

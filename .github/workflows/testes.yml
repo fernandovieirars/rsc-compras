@@ -19,5 +19,7 @@ jobs:
           node-version: 22
       - name: Regressão do cálculo de prazos
         run: node testes/calculo.test.js
+      - name: Regressão do envio de e-mail
+        run: node testes/email.test.js
       - name: Sintaxe dos scripts
         run: node --check app.js && node --check importar.js

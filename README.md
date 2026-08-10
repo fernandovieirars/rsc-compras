@@ -109,23 +109,67 @@ que a tela mostra vermelho.
 Disparo manual, útil para testar:
 
 ```
+POST /functions/v1/alerta-compras-diario?diag=1  # que transporte está ativo, que secret falta
 POST /functions/v1/alerta-compras-diario?dry=1   # monta e devolve o HTML, sem enviar
 POST /functions/v1/alerta-compras-diario         # envia de verdade
 ```
 
-### Pré-requisito: domínio verificado no Resend
+### Por onde o e-mail sai
 
-O envio usa o `RESEND_API_KEY` do projeto. Enquanto o domínio
-`riosulconstrucoes.com.br` não estiver verificado no Resend, a conta fica em
-**modo de teste** e só entrega para o endereço dono da conta — todo o resto
-falha com `403 validation_error`.
+Pelo **Microsoft Graph**, com a app registration que a Rio Sul já tem no Entra —
+remetente `noreply@riosulconstrucoes.com.br`. Não depende de domínio verificado
+em serviço de terceiro.
 
-Isso não é hipótese: o app de planos de ação acumulou **181 falhas silenciosas**
-por esse motivo, contra 86 entregas, todas para uma única pessoa. Ninguém
-percebeu porque o erro só existia no log.
+Isso é correção, não preferência. O envio era pelo Resend, que exige o domínio
+verificado por DNS; os registros nunca foram publicados, então a conta ficou em
+**modo de teste** — entrega só ao dono da conta e recusa o resto com
+`403 validation_error`. Conferido no banco em 07/08/2026: a função
+`ativar-remetente` tentou **62 vezes em três dias**, sempre com a mesma resposta:
 
-Por isso a tela de Relatório mostra o **status do último envio**: a falha
-aparece para quem usa, não só para quem consulta o banco.
+```json
+{ "acao": "aguardando",
+  "motivo": "dominio ainda nao verificado no Resend (registros de DNS pendentes)",
+  "remetente_atual": "onboarding@resend.dev" }
+```
+
+O alerta "funcionava" e não chegava a ninguém. E não é caso isolado: o app de
+planos de ação acumulou **181 falhas silenciosas** pelo mesmo motivo, contra 86
+entregas, todas para uma única pessoa. Ninguém percebeu porque o erro só existia
+no log — por isso a tela de Relatório mostra o **status do último envio**.
+
+#### Os três secrets
+
+O transporte é escolhido pelo ambiente, não por parâmetro: **sem** os três
+secrets a função cai no Resend e nada piora; **com** eles o Graph assume na
+chamada seguinte, sem redeploy e sem mexer em código.
+
+```
+supabase secrets set GRAPH_TENANT_ID=<...>     --project-ref sxinynzkudlkzvjajvaq
+supabase secrets set GRAPH_CLIENT_ID=<...>     --project-ref sxinynzkudlkzvjajvaq
+supabase secrets set GRAPH_CLIENT_SECRET=<...> --project-ref sxinynzkudlkzvjajvaq
+```
+
+São os mesmos valores que o projeto central da empresa já usa. Secrets no
+Supabase são por **projeto**, e este é outro projeto — por isso precisam ser
+copiados para cá. `GRAPH_FROM` é opcional (padrão
+`noreply@riosulconstrucoes.com.br`).
+
+**Pré-requisito no Azure:** a app registration precisa da permissão de
+**aplicação** `Mail.Send`, com consentimento do administrador. A delegada não
+serve — aqui não há ninguém logado.
+
+Para saber o que está valendo sem abrir painel nenhum:
+
+```
+POST /functions/v1/alerta-compras-diario?diag=1
+```
+
+Responde qual transporte está ativo e quais secrets faltam — nunca o valor de um
+segredo. E cada envio grava por onde saiu em `compras_envio_log.resumo.via`.
+
+> A `ativar-remetente` e o job `ativar-remetente-horario` continuam de pé porque
+> o Resend segue como plano B. Quando o Graph estiver enviando, os dois viram
+> peso morto e podem ser removidos.
 
 ### DMARC — o registro que falta
 
@@ -133,7 +177,8 @@ O domínio não tem DMARC (`_dmarc.riosulconstrucoes.com.br` está vazio). Sem e
 SPF e DKIM existem mas ninguém instrui o servidor de destino sobre o que fazer
 quando falham — e falsificar remetente em nome da Rio Sul fica mais fácil.
 
-Depois que o Resend estiver verificado, adicionar no mesmo painel do Microsoft:
+Sair pelo Graph não resolve isso: SPF e DKIM passam a ser os do Exchange Online,
+o que é melhor, mas DMARC continua ausente. Adicionar no painel do Microsoft:
 
 | | |
 |---|---|
