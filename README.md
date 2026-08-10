@@ -47,8 +47,52 @@ verde num item que venceu semana passada. Aqui a data-base é **hoje**, e o faro
 A tela recarrega ao voltar para a aba e a cada minuto — várias pessoas mexem na
 mesma lista ao mesmo tempo.
 
-**Uma obra por link:** `?obra=escola-ambev` (o padrão). Outra obra é outro
-`slug` na tabela `compras_obra`.
+---
+
+## Várias obras
+
+Cada obra tem seu acompanhamento e seu link: `?obra=escola-ambev`. **Clique no
+nome da obra no topo** para trocar de obra ou cadastrar outra.
+
+Sem `?obra=` na URL, o app abre a última obra que você usou neste aparelho — e,
+na primeira visita, a primeira da lista. Com `?obra=` de uma obra que não
+existe, ele dá erro em vez de abrir outra: link errado tem de aparecer como
+link errado, e não como o prazo da obra vizinha.
+
+### Cadastrar uma obra
+
+No trocador, em **+ Cadastrar outra obra**. Pede nome, cliente (opcional) e
+término previsto (opcional); o `slug` do link é derivado do nome pelo banco.
+Nome repetido não é recusado — ganha sufixo (`reforma-fachada-2`), porque duas
+obras podem se chamar igual em anos diferentes.
+
+Depois de criar, faltam duas coisas, e a tela conduz a ambas:
+
+1. **Importar as duas planilhas** (abas Terceirizadas e Materiais). Enquanto não
+   vierem, a obra aparece vazia e o alerta diário dela **não é enviado** — obra
+   sem planilha geraria um e-mail de tabelas vazias todo dia, e ruído diário
+   ensina a lista a ignorar o alerta.
+2. **Conferir os destinatários** na aba Relatório. A lista é *por obra*. Ao
+   cadastrar, a caixa "copiar os destinatários" vem marcada e traz a lista da
+   obra aberta — sem isso a obra nasce sem ninguém, e o alerta dela não sai para
+   e-mail nenhum, sem erro e sem log.
+
+### Por que criar obra é uma RPC, e não um `insert`
+
+`compras_obra` é **somente-leitura** para o app (migration 0006) e continua
+sendo. Quem escreve na tabela escreve em `data_base`, e data-base preenchida
+congela o farol num dia fixo: a tela para de envelhecer e ninguém percebe,
+porque tudo continua carregando. É o defeito da planilha que este app existe
+para corrigir.
+
+Então o cadastro passa por `compras_criar_obra` (migration 0011), uma função
+`security definer` que insere **só** nome, cliente e término. `data_base` não
+está na assinatura — não há como preenchê-la pela tela.
+
+Há um segundo motivo, prático: o guarda de permissões (migration 0007) declara
+`compras_obra → SELECT` e roda de hora em hora devolvendo tudo ao lugar. Um
+`grant insert` na tabela seria revogado sozinho em até 60 minutos e o cadastro
+quebraria depois do deploy, longe de quem mexeu. O guarda não olha função.
 
 ---
 
@@ -322,7 +366,9 @@ vez de atualizar a existente.
 
 ```bash
 npx http-server . -p 8080     # ou qualquer servidor estático
-node testes/calculo.test.js   # testes
+node testes/calculo.test.js   # prazos, contra os valores do Excel
+node testes/email.test.js     # acentuação e escolha do transporte
+node testes/obras.test.js     # qual obra abrir, criação por RPC, obra vazia
 ```
 
 Abrir por `file://` também funciona para inspecionar as telas.

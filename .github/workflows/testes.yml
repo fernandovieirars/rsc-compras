@@ -21,5 +21,7 @@ jobs:
         run: node testes/calculo.test.js
       - name: Regressão do envio de e-mail
         run: node testes/email.test.js
+      - name: Regressão do acompanhamento com várias obras
+        run: node testes/obras.test.js
       - name: Sintaxe dos scripts
         run: node --check app.js && node --check importar.js

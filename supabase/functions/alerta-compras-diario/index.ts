@@ -330,6 +330,16 @@ Deno.serve(async (req) => {
     ]);
 
     const contratacoes = ctr || [], materiais = mat || [];
+
+    // Obra cadastrada pela tela nasce vazia: a planilha vem depois, às vezes
+    // dias depois. Mandar um panorama de duas tabelas vazias nesse intervalo é
+    // ruído diário — e ruído diário ensina a lista a ignorar o alerta, que é o
+    // único jeito de ele falhar de vez.
+    if (!contratacoes.length && !materiais.length) {
+      relatorio.push({ obra: obra.nome, aviso: 'planilha ainda não importada — nada a enviar' });
+      continue;
+    }
+
     // A data-base vem calculada pela view — é a mesma para todas as linhas.
     const dataBase = contratacoes[0]?.data_base || materiais[0]?.data_base ||
       new Date().toISOString().slice(0, 10);
