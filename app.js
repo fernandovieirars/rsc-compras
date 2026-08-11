@@ -17,11 +17,20 @@
 const CFG = {
   url: 'https://sxinynzkudlkzvjajvaq.supabase.co',
   key: 'sb_publishable_sNkBN4Of2r7WzVD1aaJvjQ_6myl1uXZ',
-  obra: new URLSearchParams(location.search).get('obra') || 'escola-ambev',
+  // Obra pedida na URL (?obra=escola-ambev). Nulo é o caso normal de quem
+  // abre o app pelo favorito: aí vale a última obra aberta neste aparelho e,
+  // na primeira visita, a primeira da lista. Slug fixo no código não serve
+  // mais — a empresa tem várias obras e nenhuma delas é "a padrão".
+  obra: new URLSearchParams(location.search).get('obra'),
 };
+
+// Guardada por aparelho: quem cuida da obra X abre o app e cai na obra X, sem
+// precisar do link certo no bolso.
+const CHAVE_OBRA = 'rsc_compras_obra';
 
 const S = {
   obra: null,
+  obras: [],
   contratacoes: [],
   materiais: [],
   eventos: [],
@@ -230,10 +239,26 @@ async function api(caminho, opcoes = {}) {
   return dados;
 }
 
+// Qual obra abrir. Fora do fetch de propósito, para poder ser testada:
+//   · ?obra= na URL manda sempre. Link errado tem de dar ERRO, nunca abrir
+//     outra obra caladamente — quem recebeu o link precisa saber que é inválido,
+//     e compras lendo o prazo da obra errada é o pior desfecho possível aqui.
+//   · sem ?obra=, vale a última obra aberta neste aparelho;
+//   · se ela não existir mais (obra removida, aparelho novo), a primeira da lista.
+function escolherObra(obras, daUrl, lembrada) {
+  if (daUrl) return obras.find(o => o.slug === daUrl) || null;
+  return obras.find(o => o.slug === lembrada) || obras[0] || null;
+}
+
 async function carregar() {
-  const obras = await api(`compras_obra?slug=eq.${encodeURIComponent(CFG.obra)}&select=*`);
-  if (!obras.length) throw new Error(`Obra "${CFG.obra}" não encontrada.`);
-  S.obra = obras[0];
+  // A lista inteira vem junto: ela alimenta o trocador do cabeçalho e custa
+  // uma linha por obra.
+  S.obras = await api('compras_obra?select=*&order=nome.asc');
+  if (!S.obras.length) throw new Error('Nenhuma obra cadastrada ainda.');
+
+  S.obra = escolherObra(S.obras, CFG.obra, localStorage.getItem(CHAVE_OBRA));
+  if (!S.obra) throw new Error(`Obra "${CFG.obra}" não encontrada.`);
+  localStorage.setItem(CHAVE_OBRA, S.obra.slug);
   const [ctr, mat] = await Promise.all([
     api(`compras_contratacao?obra_id=eq.${S.obra.id}&ativo=is.true&select=*&order=prazo_contratacao.asc,item.asc`),
     api(`compras_material?obra_id=eq.${S.obra.id}&ativo=is.true&select=*&order=data_limite_compra.asc,item.asc`),
@@ -432,6 +457,145 @@ function renderCabecalho() {
   document.getElementById('nMat').textContent = S.materiais.length;
 }
 
+/* ============================================================
+   4b. VÁRIAS OBRAS
+   Cada obra tem seu próprio acompanhamento e seu próprio link. O trocador
+   existe para ninguém precisar decorar slug: clica no nome da obra no topo.
+
+   Criar obra é uma RPC (`compras_criar_obra`, migration 0011), não um insert.
+   A tabela continua somente-leitura para o app de propósito — quem escreve
+   nela escreve em `data_base`, e data-base preenchida congela o farol.
+   ============================================================ */
+
+// Troca de obra recarregando a página em vez de remendar o estado. São sete
+// coleções em S (contratações, materiais, eventos, destinatários, envios,
+// filtros, abertos) e qualquer uma esquecida vira dado de uma obra aparecendo
+// na tela de outra — erro caro e difícil de notar num app de compras.
+function irParaObra(slug) {
+  localStorage.setItem(CHAVE_OBRA, slug);
+  location.search = '?obra=' + encodeURIComponent(slug);
+}
+
+function abrirObras() {
+  const fundo = document.createElement('div');
+  fundo.className = 'fundo';
+  const itens = S.obras.map(o => `
+    <button class="obra-item ${o.id === S.obra.id ? 'on' : ''}" onclick="irParaObra('${esc(o.slug)}')">
+      <span class="on-marca">${o.id === S.obra.id ? '●' : ''}</span>
+      <span>
+        <span class="nome">${esc(o.nome)}</span>
+        <span class="mini">${esc(o.cliente || 'sem cliente')}${
+          o.termino_obra ? ' · término ' + fmtData(o.termino_obra) : ''}</span>
+      </span>
+    </button>`).join('');
+
+  fundo.innerHTML = `<div class="modal" style="max-width:520px">
+    <h3>Obras</h3>
+    <p>Cada obra tem seu link próprio — o que estiver na barra de endereço é o
+       que você compartilha com o pessoal daquela obra.</p>
+    <div class="lista-obras">${itens}</div>
+    <details class="nova-obra">
+      <summary>+ Cadastrar outra obra</summary>
+      <div style="padding-top:14px">
+        <input id="obraNome" placeholder="Nome da obra (ex.: Reforma da fachada — UFES)" maxlength="120">
+        <input id="obraCliente" placeholder="Cliente (opcional)" maxlength="80">
+        <label class="mini" style="display:block;margin:-6px 0 6px">Término previsto (opcional)</label>
+        <input id="obraTermino" type="date">
+        <label class="copiar">
+          <input type="checkbox" id="obraCopiar" checked>
+          <span>Copiar os destinatários do alerta de <b>${esc(S.obra.nome)}</b>
+            <span class="mini">Sem isto a obra nasce sem ninguém na lista, e o alerta diário
+              dela não sai para e-mail nenhum — sem erro, só silêncio.</span></span>
+        </label>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn" onclick="this.closest('.fundo').remove()">Cancelar</button>
+          <button class="btn pri" id="btnCriarObra" onclick="criarObra()">Criar obra</button>
+        </div>
+      </div>
+    </details>
+  </div>`;
+  fundo.addEventListener('click', e => { if (e.target === fundo) fundo.remove(); });
+  document.body.appendChild(fundo);
+}
+
+async function criarObra() {
+  const nome = document.getElementById('obraNome').value.trim();
+  const cliente = document.getElementById('obraCliente').value.trim();
+  const termino = document.getElementById('obraTermino').value || null;
+  const copiar = document.getElementById('obraCopiar').checked;
+  if (!nome) { avisar('Dê um nome à obra', true); return; }
+
+  // Sem isto, clique duplo numa conexão de canteiro cria a obra duas vezes —
+  // e a segunda vem com slug sufixado, o que ninguém entende depois.
+  const btn = document.getElementById('btnCriarObra');
+  btn.disabled = true;
+  btn.textContent = 'Criando…';
+  try {
+    const r = await api('rpc/compras_criar_obra', {
+      method: 'POST',
+      body: JSON.stringify({
+        p_nome: nome,
+        p_cliente: cliente || null,
+        p_termino: termino,
+        p_copiar_destinatarios_de: copiar ? S.obra.id : null,
+      }),
+    });
+    irParaObra(r.slug);
+  } catch (e) {
+    avisar(e.message, true);
+    btn.disabled = false;
+    btn.textContent = 'Criar obra';
+  }
+}
+
+// Obra recém-criada não tem planilha nenhuma. Mostrar a lista vazia e os KPIs
+// zerados deixaria a pessoa procurando o que fazer; o caminho é um só, então a
+// tela diz qual é.
+function blocoPrimeiraImportacao(tipo) {
+  const qual = tipo === 'contratacoes'
+    ? 'de prazos de contratação das terceirizadas'
+    : 'de materiais a comprar';
+  const resto = tipo === 'contratacoes'
+    ? 'Depois repita na aba <b>Materiais</b>, com a outra planilha.'
+    : 'Se ainda não importou a de terceirizadas, ela fica na aba <b>Terceirizadas</b>.';
+  return `<div class="quadro" style="padding:34px 24px;text-align:center">
+    <div style="font-size:32px;line-height:1">📄</div>
+    <h3 style="margin:10px 0 6px;font:700 16px var(--fonte)">
+      Esta obra ainda não tem a planilha ${qual}</h3>
+    <p class="mini" style="max-width:430px;margin:0 auto 16px;line-height:1.6">
+      O acompanhamento nasce da planilha que o planejamento gera a partir do
+      cronograma. Importe uma vez e o resto — farol, prazos, alerta diário —
+      passa a andar sozinho.<br>${resto}</p>
+    <button class="btn pri" onclick="abrirImportador('${tipo}')">Importar a planilha</button>
+  </div>`;
+}
+
+/* ---- Referência da PC ----
+   Uma linha marcada como `referencia_compartilhada` tem os valores já contados
+   dentro de outro pacote — na Escola é a 2.6.3, que responde sozinha pela
+   Pintura externa e também está no bloco 2.6 da Pintura interna. Somar as duas
+   inflava o total da obra em R$ 58.770,77 (2,5%).
+
+   A linha NÃO sai da tela e continua com a referência dela na coluna: para o
+   contrato daquele serviço o valor é real, e é por ele que a cotação da fachada
+   vai ser comparada. O que não vale é o somatório — e é só ele que muda aqui. */
+function pcReferencia(lista) {
+  return lista.filter(c => !c.referencia_compartilhada)
+              .reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+}
+function pcRepetida(lista) {
+  return lista.filter(c => c.referencia_compartilhada)
+              .reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+}
+// Rodapé do cartão: quando algo ficou de fora, dizer quanto e por quê. Total que
+// encolhe sem explicação faz a pessoa achar que o app perdeu dado.
+function pePcReferencia(lista) {
+  const fora = pcRepetida(lista);
+  return fora
+    ? `sem ${fmtMoedaCurta(fora)} de referência repetida`
+    : 'mão de obra + material';
+}
+
 /* ---- KPIs ---- */
 function kpi(rot, val, pe, cor, corVal) {
   return `<div class="kpi ${cor || ''}"><div class="rot">${rot}</div>
@@ -441,12 +605,19 @@ function kpi(rot, val, pe, cor, corVal) {
 /* ---- Tela 1: terceirizadas ---- */
 function telaContratacoes() {
   const todos = S.contratacoes;
+  if (!todos.length) return blocoPrimeiraImportacao('contratacoes');
   const cont = todos.filter(c => c.contratado).length;
   const atras = todos.filter(c => farolDe(c) === 'ATRASADO').length;
   const aten = todos.filter(c => farolDe(c) === 'ATENÇÃO').length;
   const andam = todos.filter(c => ['EM COTAÇÃO', 'EM NEGOCIAÇÃO'].includes(c.status_processo)).length;
-  const pcTotal = todos.reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+  const pcTotal = pcReferencia(todos);
   const fechado = todos.reduce((s, c) => s + Number(c.valor_contratado || 0), 0);
+  // Esta soma NÃO exclui a referência compartilhada, de propósito. Ela compara o
+  // que foi fechado contra a PC dos MESMOS contratos: se a fachada virar contrato
+  // próprio, o valor dela é gasto real e a referência dela é o parâmetro daquela
+  // cotação. Os dois lados contam a mesma coisa, e a comparação continua honesta.
+  // Se um dia a pintura interna E a externa forem contratadas separadamente, aqui
+  // vai aparecer escopo pago duas vezes — que é informação, não defeito.
   const pcDosFechados = todos.filter(c => c.valor_contratado != null)
                              .reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
   const desvio = fechado - pcDosFechados;
@@ -457,7 +628,7 @@ function telaContratacoes() {
     ${kpi('Em cotação', andam, 'cotação/negociação', 'b')}
     ${kpi('Atrasados', atras, 'prazo vencido', 'r', atras ? 'r' : '')}
     ${kpi('Atenção', aten, `vencem em ${par('alerta_atencao_dias', 5)} dias`, 'a', aten ? 'o' : '')}
-    ${kpi('Referência PC', fmtMoedaCurta(pcTotal), 'mão de obra + material', '')}
+    ${kpi('Referência PC', fmtMoedaCurta(pcTotal), pePcReferencia(todos), '')}
     ${kpi('Contratado', fmtMoedaCurta(fechado), pcDosFechados
         ? `${desvio <= 0 ? '▼' : '▲'} ${fmtMoedaCurta(Math.abs(desvio))} vs PC` : 'nada fechado ainda',
         '', desvio <= 0 ? 'g' : 'r')}
@@ -524,7 +695,10 @@ function linhaContratacao(c) {
         onchange="editar('contratacao','${c.id}','status_processo',this.value)">
       ${STATUS_CTR.map(s => `<option ${c.status_processo === s ? 'selected' : ''}>${s}</option>`).join('')}
     </select></td>
-    <td data-r="Referência PC" class="num">${fmtMoeda(c.valor_pc_total)}</td>
+    <td data-r="Referência PC" class="num">${fmtMoeda(c.valor_pc_total)}${
+      c.referencia_compartilhada
+        ? `<span class="repetida" title="Estes valores já estão contados em outro pacote da PC — a linha vale para o contrato dela, mas fica fora do total da obra.">já contada</span>`
+        : ''}</td>
     <td data-r="Contratado" class="num">${campoMoeda('contratacao', c.id, 'valor_contratado', c.valor_contratado)}</td>
     <td class="semrot"><button class="expandir" onclick="alternar('${c.id}')" title="Cotações e detalhes">${aberta ? '▾' : '▸'}</button></td>
   </tr>`;
@@ -645,6 +819,7 @@ function materiaisDaContratacao(c) {
 /* ---- Tela 2: materiais ---- */
 function telaMateriais() {
   const todos = S.materiais;
+  if (!todos.length) return blocoPrimeiraImportacao('materiais');
   const pcTotal = todos.reduce((s, m) => s + Number(m.custo_total_pc || 0), 0);
   const cotados = todos.filter(m => m.valor_total_cotado != null);
   const totalCotado = cotados.reduce((s, m) => s + Number(m.valor_total_cotado), 0);
@@ -871,7 +1046,7 @@ function telaRelatorio() {
   const contratados = ctr.filter(c => c.contratado).length;
   const comprados = mat.filter(m => m.comprado).length;
   const entregues = mat.filter(m => m.status_compra === 'ENTREGUE').length;
-  const pcCtr = ctr.reduce((s, c) => s + Number(c.valor_pc_total || 0), 0);
+  const pcCtr = pcReferencia(ctr);
   const pcMat = mat.reduce((s, m) => s + Number(m.custo_total_pc || 0), 0);
   const fechado = ctr.reduce((s, c) => s + Number(c.valor_contratado || 0), 0);
   const cotados = mat.filter(m => m.valor_total_cotado != null);
@@ -888,7 +1063,7 @@ function telaRelatorio() {
     ${kpi('Prazo da obra', diasObra === null ? '—' : (diasObra >= 0 ? `${diasObra} d` : `${-diasObra} d`),
         diasObra === null ? '' : (diasObra >= 0 ? `até ${fmtData(S.obra.termino_obra)}` : 'em atraso'),
         'b', diasObra !== null && diasObra < 0 ? 'r' : '')}
-    ${kpi('Referência PC', fmtMoedaCurta(pcCtr), 'mão de obra + material', '')}
+    ${kpi('Referência PC', fmtMoedaCurta(pcCtr), pePcReferencia(ctr), '')}
     ${kpi('Já fechado', fmtMoedaCurta(fechado + cotado), 'contratado + cotado', 'g')}
   </div>`;
 
@@ -963,7 +1138,9 @@ function telaRelatorio() {
       <div class="det" style="padding:0">
         <div class="bloco">
           <h4>Terceirizadas</h4>
-          <div class="linha"><span>Referência PC (${ctr.length} serviço${ctr.length === 1 ? '' : 's'})</span><span>${fmtMoeda(pcCtr)}</span></div>
+          <div class="linha"><span>Referência PC (${ctr.filter(c => !c.referencia_compartilhada).length} serviço${
+            ctr.filter(c => !c.referencia_compartilhada).length === 1 ? '' : 's'}${
+            pcRepetida(ctr) ? ', fora a referência repetida' : ''})</span><span>${fmtMoeda(pcCtr)}</span></div>
           <div class="linha"><span>Contratado até agora</span><span><b>${fmtMoeda(fechado)}</b></span></div>
         </div>
         <div class="bloco">
@@ -1184,7 +1361,7 @@ function exportarCSV(qual) {
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${nome}-${CFG.obra}-${base}.csv`;
+  a.download = `${nome}-${S.obra.slug}-${base}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   avisar('CSV gerado ✓');

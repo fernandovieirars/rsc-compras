@@ -4,10 +4,21 @@ name: Testes
 # sem ninguém notar na tela. Este teste compara a tradução em JavaScript com o
 # que o próprio Excel calculou nas planilhas de origem.
 
+# O gatilho pega QUALQUER branch, não só a main. Antes era `branches: [main]`
+# mais `pull_request`, e o efeito foi este: três commits de trabalho subiram numa
+# branch e o CI não rodou nenhuma vez — os testes só tinham sido executados à mão,
+# na máquina de quem escreveu. Teste que só roda onde foi escrito não é rede de
+# segurança, é lembrança.
 on:
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
+
+# Push numa branch com PR aberto dispara os dois gatilhos. O grupo cancela a
+# execução anterior do mesmo ref em vez de rodar as duas até o fim.
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   calculo:
@@ -19,5 +30,11 @@ jobs:
           node-version: 22
       - name: Regressão do cálculo de prazos
         run: node testes/calculo.test.js
+      - name: Regressão do envio de e-mail
+        run: node testes/email.test.js
+      - name: Regressão do acompanhamento com várias obras
+        run: node testes/obras.test.js
+      - name: Regressão da referência de PC contada duas vezes
+        run: node testes/referencia-pc.test.js
       - name: Sintaxe dos scripts
         run: node --check app.js && node --check importar.js

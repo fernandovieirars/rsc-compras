@@ -47,8 +47,52 @@ verde num item que venceu semana passada. Aqui a data-base é **hoje**, e o faro
 A tela recarrega ao voltar para a aba e a cada minuto — várias pessoas mexem na
 mesma lista ao mesmo tempo.
 
-**Uma obra por link:** `?obra=escola-ambev` (o padrão). Outra obra é outro
-`slug` na tabela `compras_obra`.
+---
+
+## Várias obras
+
+Cada obra tem seu acompanhamento e seu link: `?obra=escola-ambev`. **Clique no
+nome da obra no topo** para trocar de obra ou cadastrar outra.
+
+Sem `?obra=` na URL, o app abre a última obra que você usou neste aparelho — e,
+na primeira visita, a primeira da lista. Com `?obra=` de uma obra que não
+existe, ele dá erro em vez de abrir outra: link errado tem de aparecer como
+link errado, e não como o prazo da obra vizinha.
+
+### Cadastrar uma obra
+
+No trocador, em **+ Cadastrar outra obra**. Pede nome, cliente (opcional) e
+término previsto (opcional); o `slug` do link é derivado do nome pelo banco.
+Nome repetido não é recusado — ganha sufixo (`reforma-fachada-2`), porque duas
+obras podem se chamar igual em anos diferentes.
+
+Depois de criar, faltam duas coisas, e a tela conduz a ambas:
+
+1. **Importar as duas planilhas** (abas Terceirizadas e Materiais). Enquanto não
+   vierem, a obra aparece vazia e o alerta diário dela **não é enviado** — obra
+   sem planilha geraria um e-mail de tabelas vazias todo dia, e ruído diário
+   ensina a lista a ignorar o alerta.
+2. **Conferir os destinatários** na aba Relatório. A lista é *por obra*. Ao
+   cadastrar, a caixa "copiar os destinatários" vem marcada e traz a lista da
+   obra aberta — sem isso a obra nasce sem ninguém, e o alerta dela não sai para
+   e-mail nenhum, sem erro e sem log.
+
+### Por que criar obra é uma RPC, e não um `insert`
+
+`compras_obra` é **somente-leitura** para o app (migration 0006) e continua
+sendo. Quem escreve na tabela escreve em `data_base`, e data-base preenchida
+congela o farol num dia fixo: a tela para de envelhecer e ninguém percebe,
+porque tudo continua carregando. É o defeito da planilha que este app existe
+para corrigir.
+
+Então o cadastro passa por `compras_criar_obra` (migration 0011), uma função
+`security definer` que insere **só** nome, cliente e término. `data_base` não
+está na assinatura — não há como preenchê-la pela tela.
+
+Há um segundo motivo, prático: o guarda de permissões (migration 0007) declara
+`compras_obra → SELECT` e roda de hora em hora devolvendo tudo ao lugar. Um
+`grant insert` na tabela seria revogado sozinho em até 60 minutos e o cadastro
+quebraria depois do deploy, longe de quem mexeu. O guarda não olha função.
 
 ---
 
@@ -81,12 +125,37 @@ São 156 verificações, incluindo as bordas das janelas e o horário de verão.
 3. **`Total cotado` só soma itens efetivamente cotados.** Somar item sem preço
    como zero faria a comparação com a PC parecer uma economia que não existe.
 
-### Um dado que ficou como está
+### A linha que aparece em dois pacotes
 
-O material 58 (*Pintura de paredes*, linha PC 2.6.3) não tem contratação
-correspondente: na PC essa linha é **compartilhada** entre pintura interna e
-externa. Ficou sem vínculo de propósito, com a observação de origem preservada —
-somá-la nas duas contaria o custo em dobro.
+O material 58 (*Pintura de paredes*, linha PC 2.6.3) é **referência compartilhada**:
+ele responde sozinho pelo pacote 14 (*Pintura externa*) e também está dentro do
+bloco 2.6 do pacote 13 (*Pintura interna*).
+
+Somando os 18 pacotes direto, **R$ 58.770,77 entram duas vezes** — o total da obra
+vira R$ 2.368.296,64 em vez de R$ 2.309.525,86, 2,5% a mais. A prova de que a
+leitura está certa: tirando a 2.6.3, o material somado pelos pacotes bate com a
+soma dos 102 itens da planilha de materiais (R$ 1.270.239,20), a menos de um
+centavo de arredondamento.
+
+Os dois pacotes continuam existindo, porque a fachada pode ir para outro
+empreiteiro e precisa do seu próprio prazo e contrato. O que muda é só o
+somatório: a coluna `referencia_compartilhada` (migration 0012) marca a linha, o
+cartão **Referência PC** a exclui e diz quanto ficou de fora, e a linha segue na
+tela com a referência dela e um aviso *já contada*.
+
+Duas coisas de propósito, e que o teste trava:
+
+- **A comparação por contrato não exclui.** `Contratado × PC` compara o que foi
+  fechado contra a PC dos mesmos contratos; os dois lados contam a mesma coisa.
+  Se um dia a pintura interna e a externa forem contratadas separadamente, ali
+  vai aparecer escopo pago em dobro — que é informação, não defeito.
+- **A marca não entra em `CAMPOS_PLANEJAMENTO`.** Reimportar a planilha não pode
+  apagá-la, do mesmo jeito que não apaga fornecedor nem cotação.
+
+Há ainda um ponto a conferir antes de emitir pedido, que não é soma em dobro: os
+códigos `5.3.1` e `5.3.2` estão **duplicados na PC REV05** — servem tanto ao
+mobiliário quanto à informática, com valores diferentes. São itens distintos; o
+que falha é o código identificar o item sozinho.
 
 ---
 
@@ -109,23 +178,67 @@ que a tela mostra vermelho.
 Disparo manual, útil para testar:
 
 ```
+POST /functions/v1/alerta-compras-diario?diag=1  # que transporte está ativo, que secret falta
 POST /functions/v1/alerta-compras-diario?dry=1   # monta e devolve o HTML, sem enviar
 POST /functions/v1/alerta-compras-diario         # envia de verdade
 ```
 
-### Pré-requisito: domínio verificado no Resend
+### Por onde o e-mail sai
 
-O envio usa o `RESEND_API_KEY` do projeto. Enquanto o domínio
-`riosulconstrucoes.com.br` não estiver verificado no Resend, a conta fica em
-**modo de teste** e só entrega para o endereço dono da conta — todo o resto
-falha com `403 validation_error`.
+Pelo **Microsoft Graph**, com a app registration que a Rio Sul já tem no Entra —
+remetente `noreply@riosulconstrucoes.com.br`. Não depende de domínio verificado
+em serviço de terceiro.
 
-Isso não é hipótese: o app de planos de ação acumulou **181 falhas silenciosas**
-por esse motivo, contra 86 entregas, todas para uma única pessoa. Ninguém
-percebeu porque o erro só existia no log.
+Isso é correção, não preferência. O envio era pelo Resend, que exige o domínio
+verificado por DNS; os registros nunca foram publicados, então a conta ficou em
+**modo de teste** — entrega só ao dono da conta e recusa o resto com
+`403 validation_error`. Conferido no banco em 07/08/2026: a função
+`ativar-remetente` tentou **62 vezes em três dias**, sempre com a mesma resposta:
 
-Por isso a tela de Relatório mostra o **status do último envio**: a falha
-aparece para quem usa, não só para quem consulta o banco.
+```json
+{ "acao": "aguardando",
+  "motivo": "dominio ainda nao verificado no Resend (registros de DNS pendentes)",
+  "remetente_atual": "onboarding@resend.dev" }
+```
+
+O alerta "funcionava" e não chegava a ninguém. E não é caso isolado: o app de
+planos de ação acumulou **181 falhas silenciosas** pelo mesmo motivo, contra 86
+entregas, todas para uma única pessoa. Ninguém percebeu porque o erro só existia
+no log — por isso a tela de Relatório mostra o **status do último envio**.
+
+#### Os três secrets
+
+O transporte é escolhido pelo ambiente, não por parâmetro: **sem** os três
+secrets a função cai no Resend e nada piora; **com** eles o Graph assume na
+chamada seguinte, sem redeploy e sem mexer em código.
+
+```
+supabase secrets set GRAPH_TENANT_ID=<...>     --project-ref sxinynzkudlkzvjajvaq
+supabase secrets set GRAPH_CLIENT_ID=<...>     --project-ref sxinynzkudlkzvjajvaq
+supabase secrets set GRAPH_CLIENT_SECRET=<...> --project-ref sxinynzkudlkzvjajvaq
+```
+
+São os mesmos valores que o projeto central da empresa já usa. Secrets no
+Supabase são por **projeto**, e este é outro projeto — por isso precisam ser
+copiados para cá. `GRAPH_FROM` é opcional (padrão
+`noreply@riosulconstrucoes.com.br`).
+
+**Pré-requisito no Azure:** a app registration precisa da permissão de
+**aplicação** `Mail.Send`, com consentimento do administrador. A delegada não
+serve — aqui não há ninguém logado.
+
+Para saber o que está valendo sem abrir painel nenhum:
+
+```
+POST /functions/v1/alerta-compras-diario?diag=1
+```
+
+Responde qual transporte está ativo e quais secrets faltam — nunca o valor de um
+segredo. E cada envio grava por onde saiu em `compras_envio_log.resumo.via`.
+
+> A `ativar-remetente` e o job `ativar-remetente-horario` continuam de pé porque
+> o Resend segue como plano B. Quando o Graph estiver enviando, os dois viram
+> peso morto e podem ser removidos.
 
 ### DMARC — o registro que falta
 
@@ -133,7 +246,8 @@ O domínio não tem DMARC (`_dmarc.riosulconstrucoes.com.br` está vazio). Sem e
 SPF e DKIM existem mas ninguém instrui o servidor de destino sobre o que fazer
 quando falham — e falsificar remetente em nome da Rio Sul fica mais fácil.
 
-Depois que o Resend estiver verificado, adicionar no mesmo painel do Microsoft:
+Sair pelo Graph não resolve isso: SPF e DKIM passam a ser os do Exchange Online,
+o que é melhor, mas DMARC continua ausente. Adicionar no painel do Microsoft:
 
 | | |
 |---|---|
@@ -277,7 +391,10 @@ vez de atualizar a existente.
 
 ```bash
 npx http-server . -p 8080     # ou qualquer servidor estático
-node testes/calculo.test.js   # testes
+node testes/calculo.test.js   # prazos, contra os valores do Excel
+node testes/email.test.js     # acentuação e escolha do transporte
+node testes/obras.test.js     # qual obra abrir, criação por RPC, obra vazia
+node testes/referencia-pc.test.js  # referência de PC contada duas vezes
 ```
 
 Abrir por `file://` também funciona para inspecionar as telas.

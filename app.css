@@ -27,6 +27,11 @@ button,input,select,textarea{font-family:inherit}
 .topo .marca{display:flex;align-items:center;gap:11px;min-width:0}
 .topo .marca img{height:30px;width:auto;background:#fff;border-radius:4px;padding:2px 4px}
 .topo h1{font:700 16px/1.2 var(--fonte);margin:0;letter-spacing:-.01em}
+/* O nome da obra é o trocador. A seta é o que avisa que ali se clica — sem
+   ela, ninguém descobre que existem outras obras. */
+.topo h1.troca{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.topo h1.troca::after{content:'▾';font-size:12px;color:#a5a5b0;transition:color .15s}
+.topo h1.troca:hover::after{color:var(--amarelo)}
 .topo .sub{font-size:12px;color:#a5a5b0;margin-top:1px}
 .topo .dir{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chip-prazo{background:#2c2c30;border:1px solid #3d3d44;border-radius:999px;padding:5px 13px;font:600 12px var(--fonte);color:#e8e8ec}
@@ -139,6 +144,10 @@ tbody tr.est-fechado:hover,tbody tr.est-andando:hover,tbody tr.est-parado:hover{
 .legenda .pt.parado{background:var(--vermelho)}
 
 /* ── Selos ─────────────────────────────────────────────── */
+/* Marca a linha cujo valor de PC já está contado em outro pacote. Discreta de
+   propósito: é nota de rodapé da coluna, não estado de prazo. */
+.repetida{display:block;margin-top:2px;font:600 9.5px var(--fonte);letter-spacing:.04em;
+  text-transform:uppercase;color:var(--fraco);cursor:help}
 .selo{display:inline-block;padding:2.5px 9px;border-radius:999px;font:700 10.5px var(--fonte);
   text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;border:1px solid transparent}
 .selo.atrasado{background:var(--vermelho-bg);color:var(--vermelho);border-color:#fecdc9}
@@ -208,6 +217,24 @@ select.ed.st-na{color:var(--fraco);font-style:italic}
 .modal p{margin:0 0 16px;font-size:13.5px;color:var(--tinta-2);line-height:1.55}
 .modal input{width:100%;border:1px solid var(--borda);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:14px}
 .modal input:focus{outline:0;border-color:var(--amarelo-esc);box-shadow:0 0 0 3px rgba(255,217,0,.18)}
+
+/* ── Trocador de obras ─────────────────────────────────── */
+.lista-obras{display:flex;flex-direction:column;gap:6px;max-height:46vh;overflow:auto;margin-bottom:6px}
+.obra-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+  background:var(--papel);border:1px solid var(--borda);border-radius:9px;padding:10px 12px;font:inherit}
+.obra-item:hover{border-color:var(--amarelo-esc);background:#fff}
+.obra-item.on{border-color:var(--amarelo);background:var(--ambar-bg)}
+.obra-item .on-marca{color:var(--amarelo-esc);width:10px;flex:0 0 auto;font-size:11px}
+.obra-item .nome{display:block;font:600 13.5px var(--fonte);color:var(--tinta)}
+.obra-item .mini{display:block}
+.nova-obra{border-top:1px solid var(--borda);margin-top:14px;padding-top:12px}
+.nova-obra summary{cursor:pointer;font:600 13px var(--fonte);color:var(--tinta-2);list-style:none}
+.nova-obra summary::-webkit-details-marker{display:none}
+.nova-obra summary:hover{color:var(--tinta)}
+.nova-obra .copiar{display:flex;gap:9px;align-items:flex-start;margin:2px 0 16px;cursor:pointer;
+  font-size:13px;line-height:1.45;color:var(--tinta-2)}
+.nova-obra .copiar input{width:auto;margin:2px 0 0;flex:0 0 auto}
+.nova-obra .copiar .mini{display:block;margin-top:3px}
 
 /* ── Celular ───────────────────────────────────────────── */
 @media (max-width:860px){
