@@ -36,5 +36,7 @@ jobs:
         run: node testes/obras.test.js
       - name: Regressão da referência de PC contada duas vezes
         run: node testes/referencia-pc.test.js
+      - name: Regressão de "esta linha ainda pede ação?"
+        run: node testes/ainda-pede-acao.test.js
       - name: Sintaxe dos scripts
         run: node --check app.js && node --check importar.js

@@ -124,6 +124,13 @@ São 156 verificações, incluindo as bordas das janelas e o horário de verão.
    **Status** (o que compras informa).
 3. **`Total cotado` só soma itens efetivamente cotados.** Somar item sem preço
    como zero faria a comparação com a PC parecer uma economia que não existe.
+4. **Linha encerrada não vence mais.** Contratada, comprada ou `NÃO SE APLICA`
+   sai dos cartões ATRASADOS/ATENÇÃO/URGENTES e dos filtros de prazo. A linha
+   continua na lista, com a data e o "✓ contratado" — o que ela não faz mais é
+   ser cobrada. Quem decide isso é `encerrada()`, e é a mesma função para os
+   cartões, os filtros, as duas abas e o Relatório: antes cada tela tinha sua
+   própria ideia, e a aba de trabalho contava atrasado de um jeito enquanto o
+   e-mail contava de outro.
 
 ### A linha que aparece em dois pacotes
 
@@ -395,6 +402,7 @@ node testes/calculo.test.js   # prazos, contra os valores do Excel
 node testes/email.test.js     # acentuação e escolha do transporte
 node testes/obras.test.js     # qual obra abrir, criação por RPC, obra vazia
 node testes/referencia-pc.test.js  # referência de PC contada duas vezes
+node testes/ainda-pede-acao.test.js  # farol de linha já encerrada
 ```
 
 Abrir por `file://` também funciona para inspecionar as telas.
