@@ -201,6 +201,28 @@ function estadoLinha(it) {
   return '';
 }
 
+/* ---- "Ainda pede ação?" — uma definição só para o app inteiro ----
+
+   Linha encerrada (contratada, comprada ou NÃO SE APLICA) não tem mais prazo a
+   vencer. A LINHA já sabia disso — a coluna Situação mostra "—" e a Ação mostra
+   "✓ contratado" —, mas o KPI e o filtro perguntavam o farol direto. Resultado
+   na tela: o filtro "Atrasados" da aba Terceirizadas listava 8 serviços, três
+   deles CONTRATADOS, e o cartão ATRASADOS contava os mesmos 8.
+
+   Pior que o número errado era o desacordo: a aba Relatório e o e-mail diário
+   sempre checaram `!contratado` antes do farol, então a mesma obra tinha duas
+   contagens de atrasado ao mesmo tempo, dependendo de onde se olhava. Daí estas
+   funções existirem em vez de mais um `&& !c.contratado` espalhado: agora há um
+   lugar só onde essa regra mora. */
+function encerrada(it) {
+  const e = estadoLinha(it);
+  return e === 'fechado' || e === 'na';
+}
+// Farol/prioridade que ainda pedem ação. Nulo quando a linha está encerrada —
+// nulo cai fora de qualquer `includes(...)` e de qualquer `=== 'ATRASADO'`.
+function farolAtivo(c) { return encerrada(c) ? null : farolDe(c); }
+function prioridadeAtiva(m) { return encerrada(m) ? null : prioridadeDe(m); }
+
 const LEGENDA = `<div class="legenda">
   <span><i class="pt fechado"></i>fechado</span>
   <span><i class="pt andando"></i>alguém está cotando</span>
@@ -607,8 +629,8 @@ function telaContratacoes() {
   const todos = S.contratacoes;
   if (!todos.length) return blocoPrimeiraImportacao('contratacoes');
   const cont = todos.filter(c => c.contratado).length;
-  const atras = todos.filter(c => farolDe(c) === 'ATRASADO').length;
-  const aten = todos.filter(c => farolDe(c) === 'ATENÇÃO').length;
+  const atras = todos.filter(c => farolAtivo(c) === 'ATRASADO').length;
+  const aten = todos.filter(c => farolAtivo(c) === 'ATENÇÃO').length;
   const andam = todos.filter(c => ['EM COTAÇÃO', 'EM NEGOCIAÇÃO'].includes(c.status_processo)).length;
   const pcTotal = pcReferencia(todos);
   const fechado = todos.reduce((s, c) => s + Number(c.valor_contratado || 0), 0);
@@ -645,7 +667,7 @@ function telaContratacoes() {
   </div>` + LEGENDA;
 
   const linhas = todos.filter(c => {
-    const f = farolDe(c);
+    const f = farolAtivo(c);
     if (S.busca && !(`${c.atividade} ${c.linhas_pc_mo || ''} ${c.cot1_fornecedor || ''} ${c.fornecedor_escolhido || ''}`)
         .toLowerCase().includes(S.busca)) return false;
     switch (S.filtro) {
@@ -679,7 +701,7 @@ function linhaContratacao(c) {
   // Item fechado ou fora de escopo não pede mais nada. Continuar mostrando
   // "CONTRATAR ATÉ 07/08" em vermelho num serviço já contratado treina a pessoa
   // a ignorar o vermelho — e aí ele para de funcionar onde importa.
-  const encerrado = estado === 'fechado' || estado === 'na';
+  const encerrado = encerrada(c);
   const na = c.status_processo === 'NÃO SE APLICA';
 
   const principal = `<tr class="est-${estadoLinha(c) || 'neutro'} ${aberta ? 'aberta' : ''}">
@@ -825,7 +847,7 @@ function telaMateriais() {
   const totalCotado = cotados.reduce((s, m) => s + Number(m.valor_total_cotado), 0);
   const pcDosCotados = cotados.reduce((s, m) => s + Number(m.custo_total_pc || 0), 0);
   const desvio = totalCotado - pcDosCotados;
-  const urgentes = todos.filter(m => ['ATRASADO', 'URGENTE'].includes(prioridadeDe(m))).length;
+  const urgentes = todos.filter(m => ['ATRASADO', 'URGENTE'].includes(prioridadeAtiva(m))).length;
   const comprados = todos.filter(m => m.comprado).length;
   const entregues = todos.filter(m => m.status_compra === 'ENTREGUE').length;
 
@@ -852,7 +874,7 @@ function telaMateriais() {
   </div>` + LEGENDA;
 
   const linhas = todos.filter(m => {
-    const p = prioridadeDe(m);
+    const p = prioridadeAtiva(m);
     if (S.busca && !(`${m.material} ${m.linha_pc} ${m.atividade || ''} ${m.fornecedor || ''}`)
         .toLowerCase().includes(S.busca)) return false;
     switch (S.filtro) {
@@ -884,7 +906,7 @@ function linhaMaterial(m) {
   const acao = acaoMaterial(m.data_limite_compra, p);
   const aberta = S.abertos.has(m.id);
   const estado = estadoLinha(m);
-  const encerrado = estado === 'fechado' || estado === 'na';   // mesma regra da contratação
+  const encerrado = encerrada(m);
   const na = m.status_compra === 'NÃO SE APLICA';
 
   const principal = `<tr class="est-${estadoLinha(m) || 'neutro'} ${aberta ? 'aberta' : ''}">
@@ -1031,13 +1053,13 @@ function telaRelatorio() {
   const ctr = S.contratacoes, mat = S.materiais;
 
   // "Exige ação" = prazo estourado ou na iminência, e ainda não resolvido.
-  const ctrAcao = ctr.filter(c => !c.contratado && c.status_processo !== 'NÃO SE APLICA'
-      && ['ATRASADO', 'ATENÇÃO'].includes(farolDe(c)))
+  // Esta aba já fazia certo (checava `!contratado` antes do farol) enquanto as
+  // outras não. Passou a usar as mesmas funções para a regra ter um dono só.
+  const ctrAcao = ctr.filter(c => ['ATRASADO', 'ATENÇÃO'].includes(farolAtivo(c)))
     .map(c => ({ tipo: 'Terceirizada', nome: c.atividade, prazo: c.prazo_contratacao,
                  selo: farolDe(c), status: c.status_processo, valor: c.valor_pc_total,
                  dias: diasEntre(base, c.prazo_contratacao) }));
-  const matAcao = mat.filter(m => !m.comprado && m.status_compra !== 'NÃO SE APLICA'
-      && ['ATRASADO', 'URGENTE'].includes(prioridadeDe(m)))
+  const matAcao = mat.filter(m => ['ATRASADO', 'URGENTE'].includes(prioridadeAtiva(m)))
     .map(m => ({ tipo: 'Material', nome: `${m.linha_pc} — ${m.material}`, prazo: m.data_limite_compra,
                  selo: prioridadeDe(m), status: m.status_compra, valor: m.custo_total_pc,
                  dias: diasEntre(base, m.data_limite_compra) }));
@@ -1084,7 +1106,7 @@ function telaRelatorio() {
   const porServico = ctr.map(c => {
     const ms = S.materiais.filter(m => m.contratacao_id === c.id);
     const pend = ms.filter(m => !m.comprado).length;
-    const f = farolDe(c);
+    const f = farolAtivo(c);
     return `<tr>
       <td data-r="Serviço" class="atividade forte"><div class="comprio">${seloPrioridade(c)}<span class="corta" title="${esc(c.atividade)}">${esc(c.atividade)}</span></div></td>
       <td data-r="Contratar até">${fmtData(c.prazo_contratacao) || '—'}</td>
