@@ -38,5 +38,7 @@ jobs:
         run: node testes/referencia-pc.test.js
       - name: Regressão de "esta linha ainda pede ação?"
         run: node testes/ainda-pede-acao.test.js
+      - name: Regressão de quem assina a edição
+        run: node testes/identidade.test.js
       - name: Sintaxe dos scripts
         run: node --check app.js && node --check importar.js
