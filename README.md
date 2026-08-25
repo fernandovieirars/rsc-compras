@@ -36,10 +36,19 @@ verde num item que venceu semana passada. Aqui a data-base é **hoje**, e o faro
 
 1. Abra o link. Não tem login. Só consultar não pede nada.
 2. Na **primeira edição**, o app pede seu nome — ele aparece no **Histórico** ao
-   lado do que você alterar, e fica salvo no aparelho. A caixa não fecha vazia:
-   ou a pessoa se identifica, ou a mudança não é gravada. Um histórico que diz
-   "alguém mudou para EM COTAÇÃO" não responde a pergunta que se faz na reunião
-   de obra, que é quem destravou — ou quem parou — cada item.
+   lado do que você alterar. A caixa não fecha vazia: ou a pessoa se identifica,
+   ou a mudança não é gravada. Um histórico que diz "alguém mudou para EM
+   COTAÇÃO" não responde a pergunta que se faz na reunião de obra, que é quem
+   destravou — ou quem parou — cada item.
+   - **O nome vale por sessão de trabalho, não para sempre.** Depois de um tempo
+     sem editar, o app volta a perguntar quem está no aparelho. É de propósito:
+     o canteiro usa um tablet só, e sem isso o nome de quem mexeu de manhã ficava
+     assinando a edição de todo mundo à tarde. Quem está editando de fato não é
+     interrompido — cada gravação renova o prazo. E a caixa **não vem preenchida**:
+     reaproveitar o nome anterior é o botão "Sou Fulano", um clique consciente,
+     nunca o padrão automático. Sem login, isto é sistema de honra — mas honra
+     que não deixa o tablet mentir sozinho. Toque no nome no topo para trocar a
+     qualquer momento.
 3. Edite direto na tabela: status, fornecedor, valores cotados, datas de compra
    e entrega. Salva sozinho.
 4. `▸` no fim da linha abre as cotações e os detalhes.

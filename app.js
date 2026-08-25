@@ -41,6 +41,7 @@ const S = {
   busca: '',
   abertos: new Set(),
   eu: localStorage.getItem('rsc_compras_quem') || '',
+  euEm: +localStorage.getItem('rsc_compras_quem_em') || 0,
 };
 
 /* ============================================================
@@ -338,6 +339,7 @@ async function gravar(tipo, linha, campo, valor) {
         campo, valor_antes: textoValor(antes), valor_depois: textoValor(valor), por_nome: S.eu || null,
       }),
     });
+    renovarIdentidade();   // editou agora → o nome segue valendo por mais um tempo
     avisar('Salvo ✓');
   } catch (e) {
     avisar('Não salvou: ' + e.message, true);
@@ -1392,11 +1394,41 @@ function exportarCSV(qual) {
 /* ============================================================
    7. QUEM ESTÁ EDITANDO
    Sem login, por decisão: compras e fornecedores usam o link direto. O nome
-   é o que dá rastro ao histórico — pedimos uma vez e guardamos no aparelho.
+   é o que dá rastro ao histórico.
+
+   ⚠️ Guardar o nome "para sempre" no aparelho fazia o histórico mentir: o
+   canteiro usa um tablet só, alguém digitava "Fernando" uma vez e daí toda
+   edição de todo mundo saía como Fernando. Sem login não dá para PROVAR quem
+   é quem, mas dá para parar de assumir. Duas travas, as duas nesta seção:
+     1. A identidade VENCE. Depois de um tempo sem editar (JANELA_IDENTIDADE),
+        o app volta a perguntar — quem senta no tablet depois do intervalo se
+        identifica, não herda o nome de quem estava antes. Cada edição renova
+        o prazo (`renovarIdentidade`), então quem está trabalhando de fato não
+        é interrompido.
+     2. O campo NÃO vem preenchido. Reaproveitar o nome anterior é um ato
+        explícito ("sou eu"), nunca o padrão silencioso que produziu o bug.
    ============================================================ */
 let _resolverNome = null;
 
+// Quanto tempo um nome confirmado vale sem nova edição. Curto para pegar a
+// troca de mãos no tablet compartilhado; renovado a cada gravação, então não
+// atrapalha quem edita seguido. Ver `renovarIdentidade` e `identidadeFresca`.
+const JANELA_IDENTIDADE = 30 * 60 * 1000;
+
+function identidadeFresca() {
+  return !!S.eu && (Date.now() - S.euEm) < JANELA_IDENTIDADE;
+}
+
+// Toda gravação bem-sucedida estende a validade do nome. É o que evita re-
+// perguntar no meio de uma sequência de edições da mesma pessoa.
+function renovarIdentidade() {
+  if (!S.eu) return;
+  S.euEm = Date.now();
+  localStorage.setItem('rsc_compras_quem_em', String(S.euEm));
+}
+
 function perguntarQuemSou(obrigatorio) {
+  const revalidando = obrigatorio && !!S.eu;   // já teve nome, mas venceu
   const fundo = document.createElement('div');
   fundo.className = 'fundo';
   fundo.innerHTML = `<div class="modal">
@@ -1404,8 +1436,12 @@ function perguntarQuemSou(obrigatorio) {
     <p>${obrigatorio
       ? 'Antes de alterar, informe seu nome. Ele fica no histórico ao lado do que você mudar.'
       : 'Seu nome aparece no histórico ao lado do que você alterar.'}
-      Fica salvo neste aparelho — você só informa uma vez.</p>
-    <input id="campoNome" placeholder="Ex.: Fernando (Planejamento)" value="${esc(S.eu)}" maxlength="60">
+      ${revalidando
+        ? 'Confirme quem está no aparelho agora — o histórico só vale se cada um assinar o que muda.'
+        : ''}</p>
+    <input id="campoNome" placeholder="Ex.: Fernando (Planejamento)" value="" maxlength="60">
+    ${S.eu ? `<button type="button" class="btn" id="souEu"
+      style="margin:-4px 0 12px;width:100%">Sou <b>${esc(S.eu)}</b> (foi quem registrou por último)</button>` : ''}
     <div id="erroNome" class="mini" style="color:var(--vermelho);margin:-10px 0 13px;display:none">
       Escreva seu nome para continuar.</div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -1420,10 +1456,13 @@ function perguntarQuemSou(obrigatorio) {
   const campo = document.getElementById('campoNome');
   campo.focus();
   campo.addEventListener('keydown', e => { if (e.key === 'Enter') salvarQuemSou(); });
+  // "Sou Fulano" reaproveita o nome anterior — mas como escolha consciente,
+  // não como campo já preenchido que a próxima pessoa aprova no automático.
+  document.getElementById('souEu')?.addEventListener('click', () => salvarQuemSou(S.eu));
 }
 
-function salvarQuemSou() {
-  const v = document.getElementById('campoNome').value.trim();
+function salvarQuemSou(nomeExplicito) {
+  const v = (nomeExplicito ?? document.getElementById('campoNome').value).trim();
   if (!v) {
     document.getElementById('erroNome').style.display = '';
     document.getElementById('campoNome').focus();
@@ -1431,6 +1470,7 @@ function salvarQuemSou() {
   }
   S.eu = v;
   localStorage.setItem('rsc_compras_quem', v);
+  renovarIdentidade();
   fecharQuemSou(true);
   renderCabecalho();
 }
@@ -1445,7 +1485,7 @@ function fecharQuemSou(ok) {
 }
 
 function exigirNome() {
-  if (S.eu) return Promise.resolve(true);
+  if (identidadeFresca()) return Promise.resolve(true);
   return new Promise(resolve => { _resolverNome = resolve; perguntarQuemSou(true); });
 }
 

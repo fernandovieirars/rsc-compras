@@ -257,6 +257,10 @@ function abrirImportador(tipo) {
 }
 
 async function aplicarImportacao(tipo, plano, fundo) {
+  // Importar revisão de PC mexe em preço e prazo de muitas linhas de uma vez —
+  // é a última mudança que deveria ficar órfã no histórico. Mesma trava da
+  // edição campo a campo: sem nome identificado, não aplica.
+  if (!await exigirNome()) return;
   const tabela = tipo === 'contratacoes' ? 'compras_contratacao' : 'compras_material';
   const btn = document.getElementById('btnAplicar');
   btn.disabled = true;
@@ -292,6 +296,7 @@ async function aplicarImportacao(tipo, plano, fundo) {
     for (const r of plano.sumiram) {
       await api(`${tabela}?id=eq.${r.id}`, { method: 'PATCH', body: JSON.stringify({ ativo: false }) });
     }
+    renovarIdentidade();   // aplicou agora → o nome segue valendo por mais um tempo
     fundo.remove();
     await recarregar();
     avisar(`Planilha aplicada: ${plano.mudadas.length} atualizadas, ${plano.novas.length} novas ✓`);
