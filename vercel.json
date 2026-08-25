@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "//": "Este app não tem build: o deploy reescreve app.js/importar.js/app.css com o MESMO nome. Sem cache-busting no nome, o navegador segurava a versão antiga e o conserto não chegava — foi o caso do filtro 'Atrasados' que continuava listando contratados numa tela já corrigida. 'no-cache' NÃO é 'não guarde': o navegador guarda, mas revalida a cada carregamento e recebe 304 quando nada mudou. Barato, e todo deploy passa a chegar sozinho.",
+  "headers": [
+    {
+      "source": "/(.*)\\.(html|js|css)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
+  ]
+}
